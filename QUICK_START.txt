@@ -1,0 +1,15 @@
+THE GPA PROJECT — QUICK START
+
+1.  Extract the project pack.
+2.  Copy the Markdown files into the root of the Mimo
+    project/repository.
+3.  Give Mimo P00 from MIMO_DAILY_PROMPTS.md.
+4.  Review its repository findings before letting it implement features.
+5.  Continue with one prompt per session, in order.
+6.  After each session, inspect the changed files and test report.
+7.  Do not skip ahead when checks fail.
+8.  Keep CHANGE_HISTORY.md append-only and PROJECT_PROGRESS.md current.
+
+The stack mentioned in the plan is only a hypothesis based on prior
+work. Mimo must inspect the current repository and preserve working
+technology choices.
