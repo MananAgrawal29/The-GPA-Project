@@ -1,0 +1,12 @@
+# Line-ending policy.
+#
+# All text is stored with LF and checked out with LF, on every platform.
+# Prettier writes LF by default (endOfLine: "lf") and its --check compares
+# against LF, so a Windows checkout that used CRLF would fail
+# `pnpm format:check` locally while passing in Linux CI. Pinning both sides
+# to LF keeps local and CI results identical and stops Git's
+# "LF will be replaced by CRLF" warnings on every diff.
+#
+# This is a normalisation rule, not a rewrite: Git applies it to files it
+# reads from here on, so no existing file is mass-converted.
+* text=auto eol=lf

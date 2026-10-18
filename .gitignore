@@ -16,3 +16,9 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Vite cache
+.vite/

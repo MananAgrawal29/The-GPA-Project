@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref instead of piling them up.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Format, lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # No version input: pnpm/action-setup reads the exact pin from the
+      # "packageManager" field in package.json, so CI cannot drift from it.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # --frozen-lockfile fails the build if pnpm-lock.yaml and the
+      # manifests disagree, so CI never silently re-resolves dependencies.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # No database or Clerk credentials are required: API tests build
+      # their own environment and bind an ephemeral port.
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

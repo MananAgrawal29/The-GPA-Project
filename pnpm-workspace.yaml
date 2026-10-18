@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm blocks dependency build scripts by default. esbuild needs its
+# install script to place the platform binary used by Vite and Vitest.
+allowBuilds:
+  esbuild: true
