@@ -17,9 +17,12 @@ import { z } from "zod";
  *   it, so it will be a `VITE_` variable when auth is wired. Only the
  *   secret key belongs on the server, where sessions are verified.
  *
- * `DATABASE_URL` and `CLERK_SECRET_KEY` stay optional until the prompts
- * that consume them exist (P07). Requiring them now would push fake
- * credentials into local setup for no benefit.
+ * `DATABASE_URL` stays optional because the API serves only `/health`
+ * and no endpoint reads data yet; the migration script and any code that
+ * opens the database require it and fail with a clear message when it is
+ * missing (P07). `CLERK_SECRET_KEY` stays optional until sign-in is
+ * wired. Requiring either at boot would push fake credentials into local
+ * setup for no benefit.
  */
 const envSchema = z.object({
   NODE_ENV: z

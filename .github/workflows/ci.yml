@@ -47,7 +47,8 @@ jobs:
         run: pnpm typecheck
 
       # No database or Clerk credentials are required: API tests build
-      # their own environment and bind an ephemeral port.
+      # their own environment, bind an ephemeral port, and run the
+      # committed migration against an in-memory PostgreSQL (PGlite).
       - name: Test
         run: pnpm test
 

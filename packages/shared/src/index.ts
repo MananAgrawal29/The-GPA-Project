@@ -1,5 +1,25 @@
 import { z } from "zod";
 
+export {
+  SEMESTER_STATUSES,
+  createSemesterInputSchema,
+  semesterFieldsSchema,
+  semesterIdSchema,
+  semesterInvariantIssues,
+  semesterPatchSchema,
+  semesterSchema,
+  semesterStatusSchema,
+} from "./semester.js";
+
+export type {
+  CreateSemesterInput,
+  Semester,
+  SemesterFields,
+  SemesterInvariantIssue,
+  SemesterPatch,
+  SemesterStatus,
+} from "./semester.js";
+
 /** Product identity shared by every workspace package. */
 export const APP_NAME = "The GPA Project";
 

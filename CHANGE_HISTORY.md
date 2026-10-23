@@ -245,3 +245,65 @@ new entries that reference the earlier one.
     `VITE_API_BASE_URL` remains unused, and PWA/offline behaviour does
     not exist.
 -   **Follow-up:** Run P07 semester data model.
+
+------------------------------------------------------------------------
+
+## 2026-10-23 --- P07: Semester data model and persistence
+
+-   **Change:** The project has a database for the first time. A
+    semester can be created, listed, read, edited, and made the current
+    semester, always on behalf of one owner, with PostgreSQL itself
+    enforcing that a user cannot have two active semesters and cannot
+    store a blank name, an inverted term, or an active term without
+    dates. There is still no API endpoint and no screen, so nothing is
+    reachable by a browser yet.
+-   **Implementation:** Added the Drizzle schema at
+    `apps/api/src/db/schema.ts` (`users`, `semesters`, the
+    `semester_status` enum, a partial unique index for the active
+    semester, and four `CHECK` constraints), a pool-scoped PostgreSQL
+    client (`db/client.ts`), a migrator wrapper (`db/migrate.ts`), and a
+    migration script (`scripts/migrate.ts`, `db:migrate`). Generated and
+    committed the SQL migration under `apps/api/drizzle`. Added a
+    repository (`db/semester-repository.ts`) whose every query is scoped
+    by `userId`, plus a pure validation layer
+    (`src/domain/semester.ts`). Shared the field contract, status list,
+    date rules, and record schema from `packages/shared/src/semester.ts`
+    so P08 can validate a form with the same rules. Dependencies added
+    with exact pins: `drizzle-orm` 0.45.4 and `pg` 8.23.1 at runtime,
+    `drizzle-kit` 0.31.11, `@types/pg` 8.23.1, and
+    `@electric-sql/pglite` 0.5.11 for tests. Recorded D021--D024.
+-   **Verification:** `pnpm check` exit 0 --- formatting, lint,
+    typecheck, 71 tests (61 API, 10 web), and build. The 29 integration
+    tests apply the committed migration to a freshly created in-memory
+    PostgreSQL 18 (PGlite) and exercise the real constraints: a second
+    active row per user, a blank name, an inverted term, an active term
+    without dates, a missing owner, and an owner deletion all fail with
+    the expected SQL error; a second migration run is a no-op. Isolation
+    is proven with two owners: reads, updates, activation, and listing
+    cannot see or touch the other owner's rows. The remaining API tests
+    cover the domain rules (19) and the date-parser configuration (3).
+    Two real defects were found by the tests and fixed rather than
+    worked around: `.partial()` kept each field's default, so an empty
+    edit silently reset dates and status (the patch schema is now
+    written out explicitly), and Drizzle wraps driver errors, so
+    constraint detection had to walk `cause` before a unique violation
+    could be reported as a conflict. A third defect was found by
+    inspection before it reached a test: `pg` parses `date` into local
+    midnight, which shifts the day in any zone east of UTC; the pool now
+    keeps dates as strings and a regression test pins that.
+    `db:migrate` was run with no `DATABASE_URL` and with a malformed
+    one: each exits 1 and names the variable without printing a value.
+-   **Data/migration impact:** Additive only. The migration creates two
+    tables, one enum, one index, and four constraints; it drops and
+    rewrites nothing. Applying it to an empty database is the intended
+    path, and re-running it is safe.
+-   **Known limitations:** No PostgreSQL server is installed here, so the
+    migration has never run through `pg` against a real server; PGlite is
+    the same engine but not the same deployment surface, and server
+    version, extensions, roles, and pooling are unverified. `DATABASE_URL`
+    stays optional at boot because no endpoint reads data yet, and there
+    is no authenticated session, so D015 still forbids exposing these
+    repository functions. No delete or archive-only operation exists
+    beyond the status field, and activation requires the caller to say
+    what the outgoing semester becomes, which P08 must ask in the UI.
+-   **Follow-up:** Run P08 semester management UI.

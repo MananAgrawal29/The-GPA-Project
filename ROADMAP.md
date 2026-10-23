@@ -11,9 +11,10 @@ form and must match it. Where the two disagree, the daily prompts win
 and this file is corrected. Acceptance criteria recorded here remain
 binding requirements even where a prompt's text is terse.
 
-**Current status:** Phase 0 is complete at the documentation level and
-the repository still contains no application code (see
-`PROJECT_PROGRESS.md`). Phase 1 has not started.
+**Current status:** Phase 0 and Phase 1 are complete. Phase 2 is in
+progress: the semester data model (P07) exists with a committed migration
+and tests, and the semester management UI (P08) is next. See
+`PROJECT_PROGRESS.md` for the verified detail.
 
 ## Phase 0 --- Understand the repository (P00--P02)
 

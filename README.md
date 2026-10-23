@@ -4,11 +4,12 @@ This pack is the working source of truth for building **The GPA
 Project**, a personal college-management system with Mimo as the coding
 agent.
 
-**Repository status (2026-10-18):** a runnable workspace foundation
+**Repository status (2026-10-23):** a runnable workspace foundation
 exists. `apps/web` serves a responsive app shell whose navigation leads to
-honest placeholder pages, `apps/api` answers `GET /health`, and
+honest placeholder pages, `apps/api` answers `GET /health` and owns a
+PostgreSQL schema with a committed migration for semesters, and
 `packages/shared` holds the contracts between them. There is still no
-database, no authentication, and no feature module.
+authentication, no API endpoint for data, and no semester screen.
 
 ## Files
 
@@ -81,14 +82,46 @@ that does nothing.
     `@gpa/shared` only. Every route and navigation entry is declared in
     `src/navigation.ts`, so a link cannot point at a page that does not
     exist.
--   `apps/api` --- Express. Owns authorization once auth exists, and
-    will hold the Drizzle schema under `src/db` from P07.
+-   `apps/api` --- Express, plus the Drizzle schema, migrations, and
+    owner-scoped repositories under `src/db`. Owns authorization once
+    auth exists.
 -   `packages/shared` --- zod contracts and pure helpers. No runtime
     dependency other than zod.
 
 `packages/shared` compiles to `dist`, so after editing it either rerun
 `pnpm --filter @gpa/shared build` or use the root `pnpm dev` script,
 which builds it first.
+
+## Database
+
+The data layer is PostgreSQL with Drizzle ORM (D021). The schema lives in
+`apps/api/src/db/schema.ts` and the SQL it generates is committed under
+`apps/api/drizzle`, so a schema change is reviewable like any other code.
+
+```bash
+# after editing the schema
+pnpm --filter @gpa/api db:generate
+
+# apply pending migrations to the database named by DATABASE_URL
+DATABASE_URL=postgresql://gpa_user:change_me@localhost:5432/gpa \
+  pnpm --filter @gpa/api db:migrate
+```
+
+Migrations are additive and `db:migrate` records what it applied, so a
+second run is a no-op. It reads the connection string through the same
+validated environment module as the API and, when it is missing or
+malformed, exits with a message naming the variable (never its value).
+
+**Tests do not need a server.** The integration suite applies the
+committed migration to an in-memory PostgreSQL 18 (PGlite) that it creates
+and discards itself, then exercises the constraints and per-user
+isolation. That is the real engine, but it is not the managed server this
+project will deploy against: server version, extensions, roles, and
+connection pooling are only verified once a real instance exists.
+
+Calendar dates are stored as `date` and transported as `YYYY-MM-DD` with
+no conversion; the pool overrides the driver's date parser so a semester
+boundary cannot shift by a day in a non-UTC time zone (D024).
 
 ## Configuration
 
@@ -101,7 +134,7 @@ the reason; values are never printed.
 |---|---|---|---|
 | `NODE_ENV` | API | no | `development` (default), `test`, `production`. |
 | `PORT` | API | no | Defaults to 3001. Valid range 1-65535; `0` is rejected. |
-| `DATABASE_URL` | API | not yet | Reserved until persistence lands (P07). |
+| `DATABASE_URL` | API | only for data | PostgreSQL connection string. Required by `db:migrate` and by any code that opens the database; the API boots without it because no endpoint reads data yet. |
 | `CLERK_SECRET_KEY` | API | not yet | Reserved until sign-in lands (P07). Server-side only. |
 | `VITE_API_BASE_URL` | web | not yet | Reserved; no screen calls the API yet. Public by construction. |
 
@@ -111,9 +144,10 @@ precedence over `.env`, which keeps deployment configuration
 authoritative.
 
 Tests and shared tooling need no variables at all: API tests build an
-environment object in-process and bind an ephemeral port, and the shared
-package never touches `process.env`. The health check and the app shell
-run with no `.env` file present.
+environment object in-process, bind an ephemeral port, and create their
+own in-memory PostgreSQL, and the shared package never touches
+`process.env`. The health check and the app shell run with no `.env` file
+present.
 
 **Two rules that protect secrets**
 
@@ -135,7 +169,7 @@ PORT=3001 pnpm dev
 
 A normal terminal without a preset `PORT` needs none of this.
 
-## Architecture direction (approved, not yet built)
+## Architecture direction (approved; persistence built)
 
 Recorded in full as **D009** in `DECISIONS.md`: React + TypeScript +
 Vite frontend, Node.js + Express + TypeScript API, PostgreSQL with
@@ -148,9 +182,9 @@ academic and personal record is isolated by authenticated user, and
 server-side authorization derives identity from a verified Clerk session
 --- never from a client-supplied user ID.
 
-This is approved direction, not permission to scaffold, install
-dependencies, create provider accounts, or deploy. Provider choice,
-configuration, and cost verification remain future work.
+PostgreSQL, Drizzle, and the workspace are now real (D021); Clerk,
+hosting, and the managed database provider are still direction only.
+Nothing here is permission to create provider accounts or deploy.
 
 ## Local-only directories
 
