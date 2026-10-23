@@ -191,3 +191,57 @@ new entries that reference the earlier one.
     Linting is not type-aware, by design. `pnpm-lock.yaml` changed to
     record the new dev tooling.
 -   **Follow-up:** Run P06 app shell and navigation.
+
+------------------------------------------------------------------------
+
+## 2026-10-18 --- P06: Responsive app shell and navigation
+
+-   **Change:** The app now has a real shell: a persistent sidebar on
+    desktop, a header plus disclosure menu on small screens, a skip
+    link, per-page document titles, and a route for every planned
+    module. Each of those routes is a placeholder that says plainly that
+    the module is unbuilt, so navigation is complete without implying
+    any feature works. No academic feature, data, or provider was added.
+-   **Implementation:** Added `react-router` 8.5.0 (exact pin) as the
+    only new dependency and wrapped the app in `BrowserRouter` in
+    `main.tsx`. Added `src/navigation.ts` as the single source of truth
+    for the navigation groups, the seven planned modules, their
+    summaries, milestones, and status (GPA recorded as blocked per
+    D008). Added `components/AppShell.tsx` (layout, navigation, mobile
+    disclosure, Escape-to-close, and route-derived `document.title`),
+    `components/PageHeader.tsx`, `components/StatusBadge.tsx`,
+    `components/PlaceholderPanel.tsx`, `pages/TodayPage.tsx`,
+    `pages/PlannedModulePage.tsx`, and `pages/NotFoundPage.tsx`.
+    Replaced the foundation identity page in `App.tsx` with routed
+    pages, set `color-scheme: dark` in `index.css`, and rewrote the web
+    tests. Corrected the stale note in `apps/web/.env.example` that said
+    the shell would start calling the API in P06. Recorded D020.
+-   **Verification:** `pnpm check` exit 0 --- `format:check`, `lint`,
+    `typecheck`, `test`, and `build` all passed. Tests: 20 total (10 API
+    unchanged, 10 web) covering the single level-one heading per page,
+    every planned module being linked at its declared path,
+    `aria-current` on the active route only, every placeholder route
+    describing itself as unbuilt, the not-found route, and the mobile
+    disclosure opening, closing on link click, closing on Escape, and
+    staying closed after navigation. Type checking initially failed on
+    one real issue --- an optional callback passed under
+    `exactOptionalPropertyTypes` --- and was fixed in the component's
+    prop type rather than by relaxing the compiler setting. Browser
+    checks against the Vite dev server: 1440x900 desktop and 390x844
+    mobile both render correctly; at 390px the sidebar is out of the
+    accessibility tree and the menu button exposes
+    `aria-expanded`; opening it lists all eight entries; following GPA
+    navigates to `/gpa`, closes the menu, and shows the blocked
+    explanation; `/does-not-exist` renders the not-found page. Console
+    was clean (only Vite and React DevTools notices).
+-   **Data/migration impact:** None. No database, schema, or stored
+    record exists; every page states that it reads no data.
+-   **Known limitations:** Navigation is client-side, so a host serving
+    the static build must rewrite unknown paths to `index.html` or a
+    deep link will 404 at the server. `Settings` is deliberately absent
+    from navigation because no real setting exists yet (ROADMAP Phase 1),
+    and calendar views are folded into Timetable until P16 shows they
+    need their own route. The shell still makes no API request, so
+    `VITE_API_BASE_URL` remains unused, and PWA/offline behaviour does
+    not exist.
+-   **Follow-up:** Run P07 semester data model.

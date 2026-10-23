@@ -5,9 +5,10 @@ Project**, a personal college-management system with Mimo as the coding
 agent.
 
 **Repository status (2026-10-18):** a runnable workspace foundation
-exists. `apps/web` renders one page, `apps/api` answers `GET /health`,
-and `packages/shared` holds the contracts between them. There is still
-no database, no authentication, and no feature module.
+exists. `apps/web` serves a responsive app shell whose navigation leads to
+honest placeholder pages, `apps/api` answers `GET /health`, and
+`packages/shared` holds the contracts between them. There is still no
+database, no authentication, and no feature module.
 
 ## Files
 
@@ -44,7 +45,8 @@ no database, no authentication, and no feature module.
 
 ## Development
 
-Requires Node 22 or newer and pnpm 11.
+Requires Node 22.22 or newer (the floor `react-router` 8 declares) and
+pnpm 11.
 
 ```bash
 pnpm install
@@ -64,12 +66,21 @@ pnpm --filter @gpa/web dev             # web on http://localhost:5173
 ```
 
 No credentials are needed for either of those: the health check and the
-identity page run with no configuration at all. See **Configuration**
-below for the variables that exist and the one shell edge case.
+app shell run with no configuration at all. See **Configuration** below
+for the variables that exist and the one shell edge case.
+
+The shell has one real route today (`/`) plus a placeholder route per
+planned module (`/tasks`, `/timetable`, `/attendance`, `/academics`,
+`/exams`, `/gpa`, `/history`) and a not-found page. Every placeholder
+states that it is unbuilt; none of them shows data, a zero, or a control
+that does nothing.
 
 **Layout**
 
--   `apps/web` --- React, Vite, Tailwind. Imports `@gpa/shared` only.
+-   `apps/web` --- React, Vite, Tailwind, and `react-router`. Imports
+    `@gpa/shared` only. Every route and navigation entry is declared in
+    `src/navigation.ts`, so a link cannot point at a page that does not
+    exist.
 -   `apps/api` --- Express. Owns authorization once auth exists, and
     will hold the Drizzle schema under `src/db` from P07.
 -   `packages/shared` --- zod contracts and pure helpers. No runtime
@@ -92,7 +103,7 @@ the reason; values are never printed.
 | `PORT` | API | no | Defaults to 3001. Valid range 1-65535; `0` is rejected. |
 | `DATABASE_URL` | API | not yet | Reserved until persistence lands (P07). |
 | `CLERK_SECRET_KEY` | API | not yet | Reserved until sign-in lands (P07). Server-side only. |
-| `VITE_API_BASE_URL` | web | not yet | Reserved until the shell calls the API (P06). Public by construction. |
+| `VITE_API_BASE_URL` | web | not yet | Reserved; no screen calls the API yet. Public by construction. |
 
 Copy the root [.env.example](.env.example) to `.env` for local work; the
 file is optional and gitignored. Real environment variables always take
@@ -101,7 +112,7 @@ authoritative.
 
 Tests and shared tooling need no variables at all: API tests build an
 environment object in-process and bind an ephemeral port, and the shared
-package never touches `process.env`. The health check and identity page
+package never touches `process.env`. The health check and the app shell
 run with no `.env` file present.
 
 **Two rules that protect secrets**

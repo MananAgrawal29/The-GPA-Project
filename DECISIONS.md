@@ -298,3 +298,47 @@ superseded and explain why.
     must not assume `typescript` in `node_modules` is the compiler used to
     build. This override should be removed once a typescript-eslint release
     supports TypeScript 7.1's API.
+
+## D020 --- Routing is URL-based, and unbuilt modules are labelled as such
+
+-   **Date:** 2026-10-23
+-   **Decision:** Navigation is real client-side routing. `react-router`
+    8.5.0 is the only addition (exact pin, per D013), `BrowserRouter`
+    wraps the app, and `apps/web/src/navigation.ts` is the single source
+    of truth for both the navigation list and the module routes, so a
+    link cannot point at a missing page. A module that is not built yet
+    gets one shared placeholder page that states it is unbuilt, names
+    the canonical milestone, and renders no data, no zero, and no
+    control that would do nothing.
+-   **Reason:** "Consistent navigation" needs real URLs: deep links,
+    reload behaviour, the browser back button, and an active state that
+    follows the address rather than local component state. A hand-rolled
+    history shim would have to be replaced as soon as the first
+    data-backed screen needs loaders or nested layouts, so it would cost
+    a rewrite to save one small dependency.
+-   **Alternatives considered:** A hash router (no server rewrite needed
+    but ugly URLs and no SEO path); a `useState` view switcher (simplest,
+    but no deep links, no back button, and no way to share a URL from the
+    owner's own app); hand-rolling `pushState` navigation (a router with
+    nobody maintaining it). Of these, only the custom option is rejected
+    purely on maintenance grounds rather than capability.
+-   **Navigation scope:** Today plus seven modules (Tasks, Timetable,
+    Attendance, Academics, then Exams, GPA, History under a separate
+    "Later phases" group). `Settings` is deliberately absent because no
+    real setting exists yet, and calendar views are folded into Timetable
+    until P16 shows they need their own route. This follows MAIN_PLAN
+    section 5: do not ship every future module as a dead link, and label
+    a module as planned when that is genuinely useful.
+-   **Honesty rule:** a placeholder describes what will exist, when it
+    arrives, and that nothing on the page reads, saves, or changes data.
+    GPA carries the `Blocked` status because D008 forbids inventing
+    grading rules; a placeholder must never show a fabricated percentage
+    or treat missing data as zero.
+-   **Implication:** Adding a module means adding one entry to
+    `navigation.ts`; it appears in both navigation and routing with no
+    second edit. Implementing a module replaces its entry in the router
+    with a real page, and the placeholder test that asserts every
+    module is labelled unbuilt is the reminder to remove that module
+    from the planned list in the same change. Client-side routes also
+    require the eventual host to rewrite unknown paths to `index.html`;
+    that is a deployment concern recorded with P06, not a code defect.

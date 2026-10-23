@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+html {
+  /* Native scrollbars, form controls, and focus rings follow the dark shell. */
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {

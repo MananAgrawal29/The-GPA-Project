@@ -1,9 +1,10 @@
 # Project Progress --- The GPA Project
 
-**Last updated:** 2026-10-18\
-**Current milestone:** P05 --- Quality checks and CI baseline\
-**Overall status:** Runnable foundation with a single reproducible
-quality gate. No database, no authentication, no feature modules.
+**Last updated:** 2026-10-23\
+**Current milestone:** P06 --- App shell and navigation\
+**Overall status:** Runnable foundation with a responsive shell, honest
+placeholder routes, and a single reproducible quality gate. No database,
+no authentication, no feature modules.
 
 ## Completed
 
@@ -29,12 +30,19 @@ quality gate. No database, no authentication, no feature modules.
     `PORT` collision explained. Recorded as D016--D017.
 -   [x] P05: Prettier, ESLint, a five-stage `pnpm check` gate, and a
     GitHub Actions workflow added. Recorded as D018--D019.
+-   [x] P06: Responsive app shell with desktop sidebar, mobile
+    disclosure navigation, URL-based routing, and one honest placeholder
+    page per planned module. Recorded as D020.
 
 ## Foundation as built
 
 **Packages**
 
--   `apps/web` --- React 19 + Vite 8 + Tailwind 4, one page, one test.
+-   `apps/web` --- React 19 + Vite 8 + Tailwind 4 + react-router 8.
+    Nine routes: Today, seven planned-module placeholders, and a
+    not-found page; ten tests.
+-   `apps/web/src/navigation.ts` --- single source of truth for the
+    navigation groups, module routes, summaries, milestones, and status.
 -   `apps/api` --- Express 5 (ESM), env validation, `/health`, uniform
     error envelope, two tests.
 -   `packages/shared` --- zod contracts (`healthResponseSchema`,
@@ -90,10 +98,13 @@ TypeScript 7 through `@typescript/native`.
 | Web dev server | Vite ready on port 5173; `/` returned **200**; page rendered in a browser with Tailwind styles applied and a clean console (no errors or failed requests). |
 | Env fail-fast | Verified by accident and then intentionally: with the host's `PORT=0`, the API exited with `Invalid environment configuration - PORT: Too small: expected number to be >0`. A readable failure, no values leaked. |
 | `pnpm check` (P05) | **Exit 0** --- all five stages. Formatting passed after reformatting three API files; lint passed after the Express error-handler parameter convention was configured; 12 tests passed; build succeeded. |
+| `pnpm check` (P06) | **Exit 0** --- format, lint, typecheck, 20 tests, build. Type checking first failed on an optional callback under `exactOptionalPropertyTypes` and passed after the prop type was widened, not after relaxing the compiler setting. |
+| Browser checks (P06) | Desktop 1440x900 and mobile 390x844 both render correctly; the sidebar leaves the accessibility tree at mobile width, the disclosure menu reports `aria-expanded` and closes on link click, on Escape, and after navigation; `/gpa` shows the blocked explanation; an unknown path shows the not-found page. Console clean. |
 
-**Could not run:** lint (no ESLint yet --- P05), CI (P05), database
-integration tests (no schema or database), and any Clerk sign-in check
-(auth is not wired --- D015). These are unavailable, not passing.
+**Could not run:** a real GitHub Actions run (workflow validated locally
+only), database integration tests (no schema or database), and any Clerk
+sign-in check (auth is not wired --- D015). These are unavailable, not
+passing.
 
 ## Blockers / unknowns
 
@@ -105,7 +116,11 @@ integration tests (no schema or database), and any Clerk sign-in check
     intentionally win over `.env` (D014/D016).
 -   The Vite dev server binds IPv6 loopback (`[::1]`) only; `localhost`
     works, `127.0.0.1` does not.
--   No linting, formatting, or CI exists yet (P05).
+-   Navigation is client-side, so the eventual host must rewrite
+    unknown paths to `index.html`; nothing is deployed yet.
+-   The shell makes no API request, so `VITE_API_BASE_URL` is unused.
+-   `Settings` is intentionally absent from navigation until a real
+    setting exists, and calendar views live under Timetable until P16.
 -   `packages/shared` is built by a `prepare` script; a source change
     needs `pnpm --filter @gpa/shared build` before the API picks it up
     outside the root `dev` script.
@@ -118,9 +133,10 @@ integration tests (no schema or database), and any Clerk sign-in check
 
 ## Next action
 
-Run `P06` from `MIMO_DAILY_PROMPTS.md`: build the responsive app shell
-and navigation with empty states, using the existing UI conventions. No
-feature modules, no authentication, and no persistence in P06.
+Run `P07` from `MIMO_DAILY_PROMPTS.md`: design and implement the
+semester entities and validation in the persistence layer, with
+migrations and tests. That is the first prompt that needs a database, so
+it also settles the `DATABASE_URL` provider question.
 
 ## Session log
 
@@ -162,4 +178,13 @@ feature modules, no authentication, and no persistence in P06.
                                       CI workflow
                                       added;
                                       D018--D019
+
+  2026-10-23        P06               Sidebar, mobile    P07 semester
+                                      disclosure, URL   data model
+                                      routing, nine
+                                      routes, seven
+                                      labelled
+                                      placeholders;
+                                      20 tests pass;
+                                      D020
   -----------------------------------------------------------------------
