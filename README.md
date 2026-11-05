@@ -1,219 +1,61 @@
-# The GPA Project --- Project Pack
+# The GPA Project
 
-This pack is the working source of truth for building **The GPA
-Project**, a personal college-management system with Mimo as the coding
-agent.
+> **College life, a little more organized.**
 
-**Repository status (2026-10-24):** a runnable workspace foundation
-exists. `apps/web` serves a responsive app shell; its Academics screen
-lists, creates, edits, and activates the signed-in student's semesters,
-and the remaining module routes are honest placeholders. `apps/api`
-answers `GET /health` and exposes the first data endpoints
-(`/semesters`) behind a Clerk session boundary; without Clerk keys
-configured it refuses every personal-data route with 503 rather than
-trusting an unverified caller. `packages/shared` holds the contracts
-between them. No GPA calculation exists yet.
+The GPA Project is a personal college-management app built to bring academic life into one calm, connected place. It starts with the foundations—semesters and subjects—with a broader vision of helping students keep track of the moving parts of college without losing sight of the whole.
 
-## Files
+**Early development · Not a finished product**
 
--   `MAIN_PLAN.md` --- product vision, scope, architecture, data rules,
-    milestones, and acceptance principles.
--   `AGENT_INSTRUCTIONS.md` --- persistent instructions for Mimo
-    (inspect first, preserve working code, test, document decisions).
--   `CHANGE_HISTORY.md` --- append-only record of meaningful changes.
--   `PROJECT_PROGRESS.md` --- current milestone, next action, blockers,
-    and verification status.
--   `ROADMAP.md` --- phased delivery plan, aligned to the canonical
-    prompt sequence. `MIMO_DAILY_PROMPTS.md` remains authoritative for
-    prompt IDs (D010).
--   `MIMO_DAILY_PROMPTS.md` --- small, sequential prompts to give Mimo
-    one session/day at a time. Canonical for P00--P43.
--   `DECISIONS.md` --- architecture/product decisions and items that
-    must not be silently changed.
--   `QUICK_START.txt` --- short reminder of the session workflow.
--   `LICENSE` --- MIT.
+## One place for the pieces of college
 
-## How to use this pack
+College work is spread across schedules, subject lists, deadlines, attendance records, and grades. The project aims to make those pieces easier to organize together, while keeping each semester's academic record distinct and useful over time.
 
-1.  These files belong at the root of the project repository; they are
-    already there.
-2.  Start with the first prompt in `MIMO_DAILY_PROMPTS.md`.
-3.  Give Mimo **one prompt per session**. Do not jump ahead if the
-    current milestone is broken.
-4.  Ask Mimo to update `PROJECT_PROGRESS.md` and `CHANGE_HISTORY.md`
-    after meaningful work.
-5.  Keep this pack under version control with the code.
-6.  Treat the existing repository as authoritative. If a stack or
-    feature already exists, inspect it and adapt rather than rebuilding
-    it.
+The long-term direction includes planning a week, tracking what happened in class, managing work ahead, and understanding academic progress. These are goals for the project, not features that are already available.
 
-## Development
+## What works today
 
-Requires Node 22.22 or newer (the floor `react-router` 8 declares) and
-pnpm 11.
+### Semester management
 
-```bash
+Create, edit, and activate semesters, and keep past terms organized.
+
+### Subjects by semester
+
+Add subjects to a semester, browse its list, open a subject, and edit it. Switching semesters keeps each subject list in its own context.
+
+These are the project's implemented product features today. The **Today** screen and the other module routes are still placeholders.
+
+## Where it could go
+
+| Area | Status |
+| --- | --- |
+| Timetable and class planning | Planned |
+| Attendance and class history | Planned |
+| Tasks and study planning | Planned |
+| Exams, topics, and progress | Planned |
+| Semester history and export | Planned |
+| GPA calculation | Planned; grading rules need to be confirmed first |
+
+GPA calculation is **not implemented**.
+
+## A small, modern foundation
+
+- **Web:** React, TypeScript, Vite, Tailwind CSS
+- **API and data:** Node.js, Express, PostgreSQL, Drizzle ORM
+- **Sign-in and workspace:** Clerk, pnpm
+
+## Try it locally
+
+Requires Node.js 22.22+ and pnpm 11.
+
+```sh
 pnpm install
-pnpm check        # format, lint, typecheck, test, build
+pnpm dev
 ```
 
-Individual stages: `pnpm format`, `pnpm format:check`, `pnpm lint`,
-`pnpm typecheck`, `pnpm test`, `pnpm build`. Each can be run alone; CI
-runs the same five in order on pushes and pull requests.
+The app shell runs locally without credentials. Semester and subject data require database and sign-in configuration; see [project progress](PROJECT_PROGRESS.md) for the current implementation notes.
 
-Run both dev servers together with `pnpm dev`. They can also be started
-individually:
+## Project status
 
-```bash
-PORT=3001 pnpm --filter @gpa/api dev   # API on http://localhost:3001
-pnpm --filter @gpa/web dev             # web on http://localhost:5173
-```
+The project is under active development. Semester management and subject management are implemented; the next planned work is timetable design.
 
-No credentials are needed for either of those: the health check and the
-app shell run with no configuration at all. See **Configuration** below
-for the variables that exist and the one shell edge case.
-
-The shell has two real routes --- `/` (Today) and `/academics` (semester
-management) --- plus a placeholder route per planned module (`/tasks`,
-`/timetable`, `/attendance`, `/exams`, `/gpa`, `/history`) and a
-not-found page. Every placeholder states that it is unbuilt; none of
-them shows data, a zero, or a control that does nothing.
-
-**Layout**
-
--   `apps/web` --- React, Vite, Tailwind, and `react-router`. Imports
-    `@gpa/shared` only for contracts. Every route and navigation entry
-    is declared in `src/navigation.ts`, so a link cannot point at a
-    page that does not exist. Calls the API through a typed client
-    (`src/api/semesters.ts`) that never sends an owner id.
--   `apps/api` --- Express, plus the Clerk session boundary, the
-    semester routes, and the Drizzle schema, migrations, and
-    owner-scoped repositories under `src/db`. Owns authorization: no
-    route reads user data without a verified session (D025).
--   `packages/shared` --- zod contracts and pure helpers. No runtime
-    dependency other than zod.
-
-`packages/shared` compiles to `dist`, so after editing it either rerun
-`pnpm --filter @gpa/shared build` or use the root `pnpm dev` script,
-which builds it first.
-
-## Database
-
-The data layer is PostgreSQL with Drizzle ORM (D021). The schema lives in
-`apps/api/src/db/schema.ts` and the SQL it generates is committed under
-`apps/api/drizzle`, so a schema change is reviewable like any other code.
-
-```bash
-# after editing the schema
-pnpm --filter @gpa/api db:generate
-
-# apply pending migrations to the database named by DATABASE_URL
-DATABASE_URL=postgresql://gpa_user:change_me@localhost:5432/gpa \
-  pnpm --filter @gpa/api db:migrate
-```
-
-Migrations are additive and `db:migrate` records what it applied, so a
-second run is a no-op. It reads the connection string through the same
-validated environment module as the API and, when it is missing or
-malformed, exits with a message naming the variable (never its value).
-
-**Tests do not need a server.** The integration suite applies the
-committed migration to an in-memory PostgreSQL 18 (PGlite) that it creates
-and discards itself, then exercises the constraints and per-user
-isolation. That is the real engine, but it is not the managed server this
-project will deploy against: server version, extensions, roles, and
-connection pooling are only verified once a real instance exists.
-
-Calendar dates are stored as `date` and transported as `YYYY-MM-DD` with
-no conversion; the pool overrides the driver's date parser so a semester
-boundary cannot shift by a day in a non-UTC time zone (D024).
-
-## Configuration
-
-Only the API reads environment variables, and only through one module
-(`apps/api/src/config/env.ts`) that validates them at boot. A missing or
-malformed value stops the process with a message naming the variable and
-the reason; values are never printed.
-
-| Variable | Owner | Required | Notes |
-|---|---|---|---|
-| `NODE_ENV` | API | no | `development` (default), `test`, `production`. |
-| `PORT` | API | no | Defaults to 3001. Valid range 1-65535; `0` is rejected. |
-| `DATABASE_URL` | API | only for data | PostgreSQL connection string. Required by `db:migrate` and by any code that opens the database; the API boots without it and the data routes then refuse with 503. |
-| `CLERK_SECRET_KEY` | API | to enable sign-in | Clerk's server-side key. Together with `CLERK_PUBLISHABLE_KEY` it enables session verification (D025); alone it does nothing. |
-| `CLERK_PUBLISHABLE_KEY` | API | to enable sign-in | Clerk's public key; the middleware needs the matching pair. |
-| `VITE_API_BASE_URL` | web | no | Empty by default: in development the Vite dev server proxies `/semesters` and `/health` to port 3001 (D026). |
-| `VITE_CLERK_PUBLISHABLE_KEY` | web | no | Clerk's publishable key for the browser. Without it the app ships no auth code and the Academics screen says sign-in is not configured. |
-
-Copy the root [.env.example](.env.example) to `.env` for local work; the
-file is optional and gitignored. Real environment variables always take
-precedence over `.env`, which keeps deployment configuration
-authoritative.
-
-**Sign-in is optional locally, never faked.** With no Clerk keys the
-API boots, `/health` answers, and every `/semesters` route refuses with
-503 `auth_not_configured`; the web app runs without loading Clerk and
-the Academics screen states that sign-in is unavailable. To exercise
-sign-in, set both server keys plus `VITE_CLERK_PUBLISHABLE_KEY` in
-`apps/web/.env`. No end-to-end sign-in has been verified in this
-workspace --- there is no Clerk instance here (D025).
-
-Tests and shared tooling need no variables at all: API tests build an
-environment object in-process, bind an ephemeral port, and create their
-own in-memory PostgreSQL, and the shared package never touches
-`process.env`. The health check and the app shell run with no `.env` file
-present.
-
-**Two rules that protect secrets**
-
-1.  Anything prefixed with `VITE_` is compiled into the browser bundle,
-    so server-only values never use that prefix. The web example file
-    says so at the top.
-2.  `packages/shared` is imported by the browser, so it must never read
-    `process.env` or hold a secret. Contracts and pure helpers only.
-
-**If the API refuses to start with `PORT`**
-
-Some shells and agent harnesses export `PORT` (a harness may set it to
-`0`). The API rejects that rather than silently binding a random port,
-and prints which variable failed. Set it explicitly:
-
-```bash
-PORT=3001 pnpm dev
-```
-
-A normal terminal without a preset `PORT` needs none of this.
-
-## Architecture direction (approved; persistence built)
-
-Recorded in full as **D009** in `DECISIONS.md`: React + TypeScript +
-Vite frontend, Node.js + Express + TypeScript API, PostgreSQL with
-Drizzle ORM, Clerk authentication, pnpm monorepo with shared
-types/validation, Tailwind CSS, and hosted deployment with managed
-PostgreSQL.
-
-The app is designed for **multiple students from the beginning**: every
-academic and personal record is isolated by authenticated user, and
-server-side authorization derives identity from a verified Clerk session
---- never from a client-supplied user ID.
-
-PostgreSQL, Drizzle, and the workspace are now real (D021); Clerk,
-hosting, and the managed database provider are still direction only.
-Nothing here is permission to create provider accounts or deploy.
-
-## Local-only directories
-
-Two locations are intentionally not part of the tracked documentation:
-
--   `The_GPA_Project/` --- a gitignored backup copy of eight of these
-    documents, byte-identical to the root copies. It is not a second
-    source of truth (D011).
--   `.freebuff/` --- untracked local tooling state (a project ID). Not
-    application content (D011).
-
-## Working rule
-
-Build a reliable, usable system in small increments. A feature is not
-complete merely because it looks finished: it must handle realistic
-states, errors, persistence, empty states, responsive layouts, and
-relevant tests.
+[Project progress](PROJECT_PROGRESS.md) · [Roadmap](ROADMAP.md) · [Change history](CHANGE_HISTORY.md)
