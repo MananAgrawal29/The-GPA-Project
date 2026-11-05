@@ -1,6 +1,9 @@
 /** PostgreSQL SQLSTATE for a unique constraint violation. */
 export const UNIQUE_VIOLATION = "23505";
 
+/** PostgreSQL SQLSTATE for a foreign-key violation. */
+export const FOREIGN_KEY_VIOLATION = "23503";
+
 interface PostgresErrorFields {
   readonly code?: unknown;
   readonly constraint?: unknown;

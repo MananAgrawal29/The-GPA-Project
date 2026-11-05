@@ -1,12 +1,11 @@
 # Project Progress --- The GPA Project
 
-**Last updated:** 2026-10-24\
-**Current milestone:** P08 --- Semester management UI\
-**Overall status:** Runnable foundation with a responsive shell, a
-persisted and owner-scoped semester model, the first authenticated API
-endpoints, and the first data-backed screen. Clerk is wired as the
-session boundary but no keys exist in this workspace, so sign-in itself
-remains unverified.
+**Last updated:** 2026-11-05\
+**Current milestone:** P09 --- Semester-scoped subjects (backend)\
+**Overall status:** Runnable foundation with a responsive shell, an
+owner-scoped semester and subject model, authenticated subject CRUD API
+endpoints, forward migrations, and database-backed tests. The subject
+management screen and real Clerk/database verification remain outstanding.
 
 ## Completed
 
@@ -41,6 +40,10 @@ remains unverified.
 -   [x] P08: Clerk session boundary, the first data endpoints, and the
     semester management screen with explicit loading, empty,
     validation, refusal, and failure states. Recorded as D025--D027.
+-   [x] P09 (backend): Semester-scoped subject schema, forward migration,
+    composite ownership constraint, shared validation, owner-scoped
+    repository, nested authenticated routes, and 55 new tests. Recorded
+    as D028. Subject management UI is not implemented.
 
 ## Foundation as built
 
@@ -54,8 +57,8 @@ remains unverified.
 -   `apps/web/src/navigation.ts` --- single source of truth for the
     navigation groups, module routes, summaries, milestones, and status.
 -   `apps/api` --- Express 5 (ESM), env validation, `/health`, uniform
-    error envelope, the Clerk session boundary, the semester routes,
-    the Drizzle schema, migrations, and the semester repository. 78
+    error envelope, the Clerk session boundary, semester and subject
+    routes, the Drizzle schema, migrations, and both repositories. 133
     tests.
 
 **API and sign-in boundary (P08)**
@@ -74,7 +77,7 @@ remains unverified.
     activate, with explicit loading, empty, validation, refusal,
     sign-in-required, and request-failure views (D027).
 -   `packages/shared` --- zod contracts (`healthResponseSchema`,
-    `apiErrorSchema`, the semester field, patch, and record schemas),
+    `apiErrorSchema`, semester and subject create/patch/record schemas),
     the semester date and status rules, `APP_NAME`, `APP_TAGLINE`; built
     to `dist` by a `prepare` script so consumers resolve types
     immediately after install.
@@ -99,6 +102,37 @@ remains unverified.
     PostgreSQL 18 (PGlite) created by the test run, then exercise the
     real constraints and two-owner isolation. No server or credentials
     are involved.
+
+**Subject model (P09)**
+
+-   `apps/api/drizzle/0001_condemned_gertrude_yorkes.sql` --- forward,
+    additive migration: creates `subjects` with a name-length `CHECK`,
+    two indexes, and a composite foreign key
+    `(semester_id, user_id) -> semesters(id, user_id)`. The parent-side
+    unique constraint is added first so the migration applies on a
+    clean database. `0000_semester_model.sql` is untouched.
+-   `apps/api/src/db/schema.ts` --- `subjects` table and the
+    `semesters_id_user_id_unique` target. The composite key makes
+    mismatched ownership impossible through SQL; `ON DELETE RESTRICT`
+    preserves subject rows for as long as their semester exists.
+-   `apps/api/src/db/subject-repository.ts` --- create, list, read,
+    update, and delete, always filtered by `userId` and `semesterId`.
+    Invalid UUIDs read as absent, and a foreign-key rejection is mapped
+    to `SubjectOwnershipError`.
+-   `apps/api/src/subject-routes.ts` --- nested
+    `/semesters/:semesterId/subjects` routes behind the same guard as
+    P08: 503 when auth or the database is missing, 401 without a
+    verified session, 404 for a missing/foreign semester or subject,
+    and 422 with field issues for invalid input.
+-   Subject names are not unique, globally or per semester: P09 requires
+    the same name in different semesters, and identity is the generated
+    id. Duplicate names within one semester are allowed and tested
+    (D028).
+-   Tests: 33 repository tests and 22 route tests run against PGlite and
+    the real Express app with an injected verifier. They cover CRUD,
+    same names across semesters, duplicates within a semester,
+    malformed ids, cross-user isolation, ownership mismatch, and FK
+    behavior.
 
 **Dependencies added (P07, exact pins)** `drizzle-orm` 0.45.4, `pg`
 8.23.1; dev: `drizzle-kit` 0.31.11, `@types/pg` 8.23.1,
@@ -164,6 +198,8 @@ TypeScript 7 through `@typescript/native`.
 | `pnpm check` (P08) | **Exit 0** --- format, lint, typecheck, 102 tests (78 API, 24 web), build. The 17 new route tests drive the real Express app with an injected verifier (not Clerk); the 13 new web tests cover loading, empty, per-field validation, 401, 503, request failure, activation conflict, and the entry point itself. |
 | API process smoke (P08) | The real API started without Clerk keys and without `DATABASE_URL`: `/health` returned 200, and `GET`, `POST`, `PATCH`, and `POST /semesters/:id/activate` each returned **503 `auth_not_configured`**. The boot log names both missing pieces. |
 | Browser checks (P08) | Both dev servers up (`pnpm dev`, `PORT=3001`): `/semesters` through the Vite proxy returned 503 `auth_not_configured`, and `/academics` rendered the refusal state. The check found a real defect --- the rewritten `main.tsx` lacked `BrowserRouter`, so the app crashed at runtime while all component tests passed under `MemoryRouter`. Fixed, pinned by a new entry-point test proven failing on the broken file, and re-rendered with a clean console. |
+| `pnpm check` (P09-B) | **Exit 0** --- format, lint, typecheck, 157 tests (133 API, 24 web), build. The 55 new API tests are 33 repository tests and 22 route tests, all against PGlite and the real Express app. |
+| Migration checks (P09-B) | `drizzle-kit check` reported **"Everything's fine"**; a second `db:generate` reported **"No schema changes, nothing to migrate"**. The full migration sequence applied to a fresh PGlite in both new test files; re-applying is a no-op. No PostgreSQL server is available. |
 
 **Could not run:** a real GitHub Actions run (workflow validated locally
 only), a migration through `pg` against a PostgreSQL server (none is
@@ -199,10 +235,14 @@ passing.
     (D008).
 -   Calendar-date handling is recorded (D024), but timetable wall-clock
     times (P12) and the excused-attendance policy (P19) remain open.
--   No PostgreSQL server exists in this workspace, so the migration has
-    only been applied to PGlite, and the managed-provider choice is still
-    unconfirmed. `DATABASE_URL` stays optional at boot because no
+-   No PostgreSQL server exists in this workspace, so the migrations
+    have only been applied to PGlite, and the managed-provider choice is
+    still unconfirmed. `DATABASE_URL` stays optional at boot because no
     endpoint reads data yet.
+-   Subject management has no frontend yet; subjects can only be
+    managed through the API. The canonical P10 prompt owns that screen.
+-   Subjects are hard-deleted; future timetable, attendance, and task
+    links will need a safe relationship policy before this is final.
 -   Authentication is wired but unconfigured (D025): without Clerk
     keys every data route refuses with 503 and no sign-in has ever run
     end to end. Real keys are needed before the screen can be used with
@@ -210,11 +250,12 @@ passing.
 
 ## Next action
 
-Run `P09` from `MIMO_DAILY_PROMPTS.md`: semester-scoped subjects ---
-persistence and validation on the model P07 added, behind the same
-session boundary P08 built. Do not use a subject name alone as a unique
-identity. Clerk keys still need to be provisioned before sign-in can be
-verified for real (D025).
+Review and close P09: the backend, migration, and tests are complete.
+Do not mark the milestone fully complete until the remaining scope is
+agreed. Run `P10` (subject management UI) next, scoped to the selected
+semester; it must consume the existing endpoints and must not mix
+subjects between semesters. Clerk and managed PostgreSQL still need real
+configuration before sign-in and server migrations can be verified.
 
 ## Session log
 
@@ -279,4 +320,11 @@ verified for real (D025).
                                       semester screen;
                                       102 tests pass;
                                       D025--D027
+
+  2026-11-05        P09-B             Subject migration, P10 subject
+                                      composite FK, 33   management UI
+                                      repository + 22
+                                      route tests;
+                                      157 tests pass;
+                                      D028
   -----------------------------------------------------------------------

@@ -8,6 +8,7 @@ import { healthResponseSchema, type HealthResponse } from "@gpa/shared";
 import { unconfiguredAuth, type AuthBoundary } from "./auth/session.js";
 import type { Database } from "./db/client.js";
 import { registerSemesterRoutes } from "./semester-routes.js";
+import { registerSubjectRoutes } from "./subject-routes.js";
 
 export interface AppOptions {
   /**
@@ -40,6 +41,7 @@ export function createApp(options: AppOptions = {}): Express {
   app.use(express.json({ limit: "100kb" }));
 
   registerSemesterRoutes(app, { auth, database: options.database });
+  registerSubjectRoutes(app, { auth, database: options.database });
 
   app.get("/health", (_request: Request, response: Response) => {
     // Parsed through the shared schema so the producer cannot drift from

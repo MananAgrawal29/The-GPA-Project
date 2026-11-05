@@ -564,3 +564,37 @@ superseded and explain why.
     tests cover guards, validation, conflict, and two-owner isolation,
     but both use the injected boundary (D025). None of them prove Clerk
     verification itself.
+
+## D028 --- Subject ownership is a composite foreign key; names are not unique
+
+-   **Date:** 2026-11-05
+-   **Decision:** A subject stores `semester_id` and `user_id`, and the
+    database enforces `(semester_id, user_id)` against a unique
+    `semesters(id, user_id)` key through
+    `subjects_semester_owner_fk` with `ON DELETE RESTRICT`. A subject
+    therefore cannot reference a semester that does not exist, or one
+    whose owner differs from the subject's owner, even through direct
+    SQL. The repository still filters every read and write by both ids
+    in SQL; routes verify semester ownership first and report a
+    missing/foreign semester as 404. A late FK rejection is mapped to
+    `SubjectOwnershipError` and the same 404 response.
+-   **Name uniqueness:** no unique constraint exists on subject names,
+    globally or per semester. P09 explicitly requires the same name in
+    different semesters, does not require per-semester uniqueness, and
+    forbids treating the name as identity. Identity is the generated
+    subject id; duplicate names within one semester are allowed and
+    covered by tests.
+-   **Reason:** Application-only checks can be bypassed by a script, a
+    maintenance query, or a future endpoint. The project already repeats
+    validation as database constraints (D021--D023), and a plain
+    `semester_id` foreign key alone would still permit a mismatched
+    `user_id`.
+-   **Rejected alternative:** Dropping `user_id` from subjects and
+    joining `semesters` on every query. It would remove the redundancy,
+    but makes the common ownership scope indirect and forces every
+    future subject query to carry a join; the composite key is additive
+    and cheap.
+-   **Implication:** Future tables that store both `semester_id` and
+    `user_id` should use the same composite pattern. The extra
+    `semesters(id, user_id)` unique index is redundant to the primary key
+    but deliberate: it is the target the composite key requires.

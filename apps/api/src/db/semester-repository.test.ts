@@ -67,6 +67,7 @@ describe("semester migration", () => {
 
     expect(tables.rows.map((row) => row.table_name)).toEqual([
       "semesters",
+      "subjects",
       "users",
     ]);
   });

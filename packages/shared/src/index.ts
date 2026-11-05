@@ -10,6 +10,10 @@ export {
   semesterPatchSchema,
   semesterSchema,
   semesterStatusSchema,
+  subjectCreateInputSchema,
+  subjectIdSchema,
+  subjectPatchSchema,
+  subjectSchema,
 } from "./semester.js";
 
 export type {
@@ -20,6 +24,9 @@ export type {
   SemesterInvariantIssue,
   SemesterPatch,
   SemesterStatus,
+  Subject,
+  SubjectCreateInput,
+  SubjectPatch,
 } from "./semester.js";
 
 /** Product identity shared by every workspace package. */

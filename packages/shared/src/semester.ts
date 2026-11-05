@@ -1,5 +1,58 @@
 import { z } from "zod";
 
+const subjectNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Name is required.")
+  .max(80, "Name must be 80 characters or fewer.");
+
+/**
+ * A subject offered within a specific semester.
+ *
+ * A subject name is not globally unique: the same name can appear in
+ * different semesters. Identity is the server-assigned `id`, scoped to
+ * the semester it belongs to.
+ */
+export interface Subject {
+  readonly id: string;
+  readonly semesterId: string;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Payload accepted when creating a subject. */
+export const subjectCreateInputSchema = z.object({
+  name: subjectNameSchema,
+});
+
+export type SubjectCreateInput = z.infer<typeof subjectCreateInputSchema>;
+
+/**
+ * Payload accepted when editing a subject.
+ *
+ * Written out rather than derived with `.partial()` so an empty patch
+ * changes nothing instead of applying field defaults, matching the
+ * reasoning behind `semesterPatchSchema`.
+ */
+export const subjectPatchSchema = z.object({
+  name: subjectNameSchema.optional(),
+});
+
+export type SubjectPatch = z.infer<typeof subjectPatchSchema>;
+
+/** Identifier format for a subject, validated before it reaches SQL. */
+export const subjectIdSchema = z.uuid();
+
+/** A subject as stored and returned by the API. */
+export const subjectSchema = z.object({
+  id: subjectIdSchema,
+  semesterId: z.uuid(),
+  name: subjectNameSchema,
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
 /**
  * Semester lifecycle.
  *

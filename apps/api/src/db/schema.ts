@@ -2,11 +2,13 @@ import { sql } from "drizzle-orm";
 import {
   check,
   date,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -93,6 +95,11 @@ export const semesters = pgTable(
   (table) => [
     index("semesters_user_id_idx").on(table.userId),
 
+    // Composite foreign-key target for subjects: `(id, user_id)` lets the
+    // database prove that a subject's owner is the semester's owner, not
+    // just that both ids exist somewhere.
+    unique("semesters_id_user_id_unique").on(table.id, table.userId),
+
     // At most one active semester per user (MAIN_PLAN section 7). A
     // partial index expresses this in the database rather than trusting
     // every future code path to check first.
@@ -124,3 +131,54 @@ export const semesters = pgTable(
 
 export type UserRow = typeof users.$inferSelect;
 export type SemesterRow = typeof semesters.$inferSelect;
+
+export const subjects = pgTable(
+  "subjects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    // Every subject belongs to a specific semester. The composite foreign
+    // key below is the only relationship: it also requires `user_id` to
+    // match the semester's owner, so a subject cannot be filed under
+    // someone else's term through any code path.
+    semesterId: uuid("semester_id").notNull(),
+
+    // Owner is derived from the associated semester, not from the request.
+    userId: text("user_id").notNull(),
+
+    name: text("name").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("subjects_user_id_idx").on(table.userId),
+    index("subjects_semester_id_idx").on(table.semesterId),
+
+    // Ownership integrity: the referenced pair must exist in semesters,
+    // so `user_id` is the owner of `semester_id`, and the referenced user
+    // therefore exists too (semesters.user_id already references users).
+    foreignKey({
+      columns: [table.semesterId, table.userId],
+      foreignColumns: [semesters.id, semesters.userId],
+      name: "subjects_semester_owner_fk",
+    }).onDelete("restrict"),
+
+    // Repeats the shared contract so a subject cannot be stored with a
+    // blank or overlong name through SQL, a script, or a future endpoint.
+    check(
+      "subjects_name_length",
+      sql`char_length(btrim(${table.name})) between 1 and 80`,
+    ),
+
+    // The same subject name is allowed in different semesters, and names
+    // are not unique even within one semester: identity is the id (P09).
+  ],
+);
+
+export type SubjectRow = typeof subjects.$inferSelect;

@@ -389,3 +389,44 @@ new entries that reference the earlier one.
     is in-flight blocking in the UI plus the server's 409; there is no
     idempotency key.
 -   **Follow-up:** Run P09 semester-scoped subjects.
+
+------------------------------------------------------------------------
+
+## 2026-11-05 --- P09-B: Subject migration and backend tests
+
+-   **Change:** Added the semester-scoped subject backend. A subject now
+    belongs to one semester and one owner, the same name may be reused in
+    different semesters (or within one semester), and authenticated
+    callers can create, list, read, update, and delete subjects only
+    inside their own semesters.
+-   **Implementation:** Added `0001_condemned_gertrude_yorkes.sql`, an
+    additive migration that creates `subjects` with a name-length
+    `CHECK`, `subjects_user_id_idx`, `subjects_semester_id_idx`, and a
+    composite `(semester_id, user_id)` foreign key to
+    `semesters(id, user_id)` with `ON DELETE RESTRICT`. The parent
+    `semesters_id_user_id_unique` constraint is applied before the
+    foreign key. The repository maps the FK rejection to
+    `SubjectOwnershipError`; routes expose nested
+    `/semesters/:semesterId/subjects` endpoints behind the D025 guard.
+    Shared create, patch, id, and record schemas live in
+    `@gpa/shared`; `SubjectValidationError` maps invalid input to 422.
+-   **Verification:** `pnpm check` exit 0 --- format, lint, typecheck,
+    **157 tests (133 API, 24 web)**, build. The 55 new API tests are 33
+    repository tests and 22 route tests. `drizzle-kit check` reported
+    "Everything's fine"; a second `db:generate` reported "No schema
+    changes, nothing to migrate". Both new test files apply the complete
+    migration sequence to a fresh PGlite database, and re-applying is a
+    no-op. The SQL `CHECK`, composite FK, indexes, and parent unique
+    constraint are asserted directly.
+-   **Data/migration impact:** Additive. `0000_semester_model.sql` is
+    unmodified. The new migration adds one table, one parent unique
+    constraint, two indexes, one check, and one composite FK. No
+    existing rows are rewritten or deleted.
+-   **Known limitations:** No PostgreSQL server or Clerk instance exists
+    here: the tests use PGlite and an injected auth verifier, so real
+    server migration and real token verification remain unverified.
+    Subject management has no frontend yet. Deletes are hard deletes;
+    future academic references will need a deliberate policy. No
+    uniqueness is enforced on subject names.
+-   **Follow-up:** Run P10 subject management UI, scoped to the selected
+    semester and built on these endpoints.
