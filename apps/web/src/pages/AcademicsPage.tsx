@@ -6,6 +6,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { Link } from "react-router";
 import type { FieldIssue, Semester } from "@gpa/shared";
 import {
   ApiRequestError,
@@ -545,6 +546,14 @@ export default function AcademicsPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    <Link
+                      to={`/academics/subjects?semester=${semester.id}`}
+                      aria-label={`Manage subjects for ${semester.name}`}
+                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+                    >
+                      Subjects
+                    </Link>
+
                     {semester.status !== "active" ? (
                       <button
                         type="button"
@@ -672,8 +681,8 @@ export default function AcademicsPage() {
       ) : null}
 
       <p className="mt-8 text-xs text-slate-500">
-        Subjects and timetable arrive with P09–P10. Nothing here shows a number
-        the server did not return.
+        Subjects are managed per semester. Timetable arrives with P11–P16.
+        Nothing here shows a number the server did not return.
       </p>
     </>
   );

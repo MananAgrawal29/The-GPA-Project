@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Semester } from "@gpa/shared";
 import AcademicsPage from "./AcademicsPage";
@@ -67,6 +68,14 @@ function sentBody(index: number): Record<string, unknown> {
   return JSON.parse(String(init?.body)) as Record<string, unknown>;
 }
 
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <AcademicsPage />
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
@@ -89,7 +98,7 @@ describe("refusal states", () => {
       ),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
 
     expect(
       await screen.findByText(/Personal data is unavailable/),
@@ -103,7 +112,7 @@ describe("refusal states", () => {
       jsonResponse(errorBody("unauthenticated", "Sign in to continue."), 401),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
 
     expect(await screen.findByText("Sign in required")).toBeTruthy();
     expect(screen.getByText(/no Clerk publishable key/i)).toBeTruthy();
@@ -113,7 +122,7 @@ describe("refusal states", () => {
   it("shows a retry for a request that failed outright", async () => {
     fetchMock.mockRejectedValueOnce(new Error("network down"));
 
-    render(<AcademicsPage />);
+    renderPage();
 
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
@@ -128,7 +137,7 @@ describe("loading and listing", () => {
     });
     fetchMock.mockReturnValueOnce(pending);
 
-    render(<AcademicsPage />);
+    renderPage();
 
     expect(screen.getByRole("status").textContent).toMatch(/Loading semesters/);
 
@@ -141,7 +150,7 @@ describe("loading and listing", () => {
   it("renders an empty state instead of an empty list", async () => {
     mockResponses(jsonResponse({ semesters: [] }));
 
-    render(<AcademicsPage />);
+    renderPage();
 
     expect(await screen.findByText("No semesters yet")).toBeTruthy();
     expect(
@@ -164,7 +173,7 @@ describe("loading and listing", () => {
       }),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
 
     expect(await screen.findByText("Semester 1")).toBeTruthy();
     expect(screen.getByText("Semester 2")).toBeTruthy();
@@ -184,7 +193,7 @@ describe("creating a semester", () => {
       jsonResponse({ semesters: [created] }),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
     fireEvent.click(
       await screen.findByRole("button", { name: /Create your first semester/ }),
     );
@@ -226,7 +235,7 @@ describe("creating a semester", () => {
       ),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
     fireEvent.click(
       await screen.findByRole("button", { name: /New semester/ }),
     );
@@ -273,7 +282,7 @@ describe("activating a semester", () => {
       }),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Make current" }),
@@ -308,7 +317,7 @@ describe("activating a semester", () => {
       ),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Make current" }),
@@ -325,7 +334,7 @@ describe("activating a semester", () => {
       jsonResponse({ semesters: [semester({ status: "active" })] }),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
 
     expect(await screen.findByText("Current")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Make current" })).toBeNull();
@@ -343,7 +352,7 @@ describe("archiving", () => {
       jsonResponse({ semesters: [archived] }),
     );
 
-    render(<AcademicsPage />);
+    renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
 

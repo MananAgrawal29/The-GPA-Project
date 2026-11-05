@@ -154,12 +154,28 @@ export const navigationGroups: readonly NavigationGroup[] = [
   },
 ];
 
-/** The navigation entry for an exact path, if one exists. */
+/**
+ * The navigation entry for a path, if one exists.
+ *
+ * Exact matches win; otherwise the nearest built module owns its nested
+ * routes (for example `/academics/subjects` belongs to Academics), so the
+ * shell title and active navigation stay correct on detail pages.
+ */
 export function findNavigationItem(
   pathname: string,
 ): NavigationItem | undefined {
   for (const group of navigationGroups) {
     const match = group.items.find((item) => item.path === pathname);
+
+    if (match) {
+      return match;
+    }
+  }
+
+  for (const group of navigationGroups) {
+    const match = group.items.find(
+      (item) => item.path !== "/" && pathname.startsWith(`${item.path}/`),
+    );
 
     if (match) {
       return match;

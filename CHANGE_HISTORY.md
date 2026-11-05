@@ -430,3 +430,42 @@ new entries that reference the earlier one.
     uniqueness is enforced on subject names.
 -   **Follow-up:** Run P10 subject management UI, scoped to the selected
     semester and built on these endpoints.
+
+------------------------------------------------------------------------
+
+## 2026-11-05 --- P10: Subject management UI
+
+-   **Change:** Added a browser subject-management screen with list,
+    detail, create, and edit flows. The screen is reached from each
+    semester in Academics and always operates on one selected semester.
+-   **Implementation:** `/academics/subjects` renders the list and
+    create flow; `/academics/subjects/:subjectId?semester=<id>` renders
+    one subject and its edit form. The selected semester is stored in the
+    URL, defaults to the active semester, then to the first semester when
+    none is active, and switching semesters returns to the list. The list
+    and detail children are keyed by semester id, so the previous
+    semester's view is unmounted rather than left on screen while a new
+    request is in flight. The detail view also rejects a response whose
+    `semesterId` does not match. The shared fetch transport moved to
+    `apps/web/src/api/client.ts`; `apps/web/src/api/subjects.ts` addresses
+    subjects only by id under the semester path; and
+    `SubjectNameForm` applies the shared create schema before submitting.
+    No request carries an owner id. No delete control or optional subject
+    metadata was added.
+-   **Verification:** `pnpm check` exit 0 --- format, lint, typecheck,
+    **171 tests (133 API, 38 web)**, build. The 14 new web tests cover the
+    list, empty state, create, client and server validation, detail,
+    edit, missing and cross-semester subjects, semester switching,
+    active/default/no-active selection, no semesters, request failure,
+    and sign-in required.
+-   **Data/migration impact:** None. No API, schema, or migration change
+    was made; P10 consumes the P09 endpoints.
+-   **Known limitations:** The screen was exercised in jsdom with a
+    stubbed `fetch`, not in a real browser with a real Clerk session.
+    Duplicate subject names are allowed and render as separate records,
+    but they are visually distinguished only by their records and dates.
+    Delete remains API-only because it is outside the canonical P10
+    scope.
+-   **Follow-up:** Run P11 timetable domain design. Do not begin P12
+    persistence until the recurring-slot and dated-occurrence model is
+    recorded.

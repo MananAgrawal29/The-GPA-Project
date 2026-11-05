@@ -1,11 +1,12 @@
 # Project Progress --- The GPA Project
 
 **Last updated:** 2026-11-05\
-**Current milestone:** P09 --- Semester-scoped subjects (backend)\
+**Current milestone:** P10 --- Subject management UI\
 **Overall status:** Runnable foundation with a responsive shell, an
 owner-scoped semester and subject model, authenticated subject CRUD API
-endpoints, forward migrations, and database-backed tests. The subject
-management screen and real Clerk/database verification remain outstanding.
+endpoints, forward migrations, database-backed tests, and a
+semester-scoped subject management screen. Real Clerk/database
+verification remains outstanding.
 
 ## Completed
 
@@ -43,17 +44,20 @@ management screen and real Clerk/database verification remain outstanding.
 -   [x] P09 (backend): Semester-scoped subject schema, forward migration,
     composite ownership constraint, shared validation, owner-scoped
     repository, nested authenticated routes, and 55 new tests. Recorded
-    as D028. Subject management UI is not implemented.
+    as D028.
+-   [x] P10: Subject list, detail, create, and edit flows scoped to the
+    selected semester, with URL-based selection and keyed views that
+    prevent stale subject data. Recorded as D029.
 
 ## Foundation as built
 
 **Packages**
 
 -   `apps/web` --- React 19 + Vite 8 + Tailwind 4 + react-router 8.
-    Nine routes: Today, the Academics screen, six planned-module
-    placeholders, and a not-found page; 24 tests. Clerk renders only
-    when `VITE_CLERK_PUBLISHABLE_KEY` is set, so a keyless build ships
-    no auth code (D026).
+    Eleven routes: Today, Academics, the subject list and detail screens,
+    six planned-module placeholders, and a not-found page; 38 tests.
+    Clerk renders only when `VITE_CLERK_PUBLISHABLE_KEY` is set, so a
+    keyless build ships no auth code (D026).
 -   `apps/web/src/navigation.ts` --- single source of truth for the
     navigation groups, module routes, summaries, milestones, and status.
 -   `apps/api` --- Express 5 (ESM), env validation, `/health`, uniform
@@ -134,6 +138,36 @@ management screen and real Clerk/database verification remain outstanding.
     malformed ids, cross-user isolation, ownership mismatch, and FK
     behavior.
 
+**Subject management UI (P10)**
+
+-   `apps/web/src/pages/SubjectsPage.tsx` --- subject list, detail,
+    create, and edit flows. The selected semester lives in the URL as
+    `?semester=<id>`; no semester defaults to the active one, or to the
+    first existing semester when none is active.
+-   The list and detail views are keyed by semester id (detail also by
+    subject id), so a semester change unmounts the old view instead of
+    leaving its subjects on screen. The detail view also rejects a
+    response whose `semesterId` differs from the selected semester.
+-   `apps/web/src/api/subjects.ts` --- typed client for list, read,
+    create, and update. Every path carries the semester id; a subject is
+    addressed by its id, never by its name, and no request carries an
+    owner id.
+-   `apps/web/src/api/client.ts` --- shared fetch and error transport,
+    now used by both the semester and subject clients.
+-   `apps/web/src/components/SubjectNameForm.tsx` --- one create/edit
+    form using the shared subject schema for client validation and
+    rendering server field issues.
+-   `apps/web/src/pages/AcademicsPage.tsx` --- each semester links to its
+    own subject screen; `apps/web/src/navigation.ts` keeps Academics
+    current on the nested routes.
+-   No delete control is exposed. P10's canonical scope is list, detail,
+    create, and edit; the P09 API's delete endpoint remains unused by the
+    UI.
+-   Tests: 14 new web tests cover list, empty, create, client and server
+    validation, detail, edit, missing and cross-semester subjects,
+    semester switching, active/default/no-active selection, no
+    semesters, request failure, and sign-in required.
+
 **Dependencies added (P07, exact pins)** `drizzle-orm` 0.45.4, `pg`
 8.23.1; dev: `drizzle-kit` 0.31.11, `@types/pg` 8.23.1,
 `@electric-sql/pglite` 0.5.11.
@@ -200,6 +234,7 @@ TypeScript 7 through `@typescript/native`.
 | Browser checks (P08) | Both dev servers up (`pnpm dev`, `PORT=3001`): `/semesters` through the Vite proxy returned 503 `auth_not_configured`, and `/academics` rendered the refusal state. The check found a real defect --- the rewritten `main.tsx` lacked `BrowserRouter`, so the app crashed at runtime while all component tests passed under `MemoryRouter`. Fixed, pinned by a new entry-point test proven failing on the broken file, and re-rendered with a clean console. |
 | `pnpm check` (P09-B) | **Exit 0** --- format, lint, typecheck, 157 tests (133 API, 24 web), build. The 55 new API tests are 33 repository tests and 22 route tests, all against PGlite and the real Express app. |
 | Migration checks (P09-B) | `drizzle-kit check` reported **"Everything's fine"**; a second `db:generate` reported **"No schema changes, nothing to migrate"**. The full migration sequence applied to a fresh PGlite in both new test files; re-applying is a no-op. No PostgreSQL server is available. |
+| `pnpm check` (P10) | **Exit 0** --- format, lint, typecheck, 171 tests (133 API, 38 web), build. The 14 new web tests cover list, empty, create, client/server validation, detail, edit, failure states, and semester-switch isolation. |
 
 **Could not run:** a real GitHub Actions run (workflow validated locally
 only), a migration through `pg` against a PostgreSQL server (none is
@@ -239,8 +274,10 @@ passing.
     have only been applied to PGlite, and the managed-provider choice is
     still unconfirmed. `DATABASE_URL` stays optional at boot because no
     endpoint reads data yet.
--   Subject management has no frontend yet; subjects can only be
-    managed through the API. The canonical P10 prompt owns that screen.
+-   P10 was verified in jsdom with a stubbed fetch, not in a real
+    browser with a real Clerk session. The subject screen does not
+    expose delete, although the P09 API supports it; P10's canonical
+    scope is list/detail/create/edit.
 -   Subjects are hard-deleted; future timetable, attendance, and task
     links will need a safe relationship policy before this is final.
 -   Authentication is wired but unconfigured (D025): without Clerk
@@ -250,12 +287,12 @@ passing.
 
 ## Next action
 
-Review and close P09: the backend, migration, and tests are complete.
-Do not mark the milestone fully complete until the remaining scope is
-agreed. Run `P10` (subject management UI) next, scoped to the selected
-semester; it must consume the existing endpoints and must not mix
-subjects between semesters. Clerk and managed PostgreSQL still need real
-configuration before sign-in and server migrations can be verified.
+P10 is complete in code and tests: subjects can be listed, opened,
+created, and edited per semester, and switching semesters cannot retain
+the previous semester's subject view. The Phase 2 user-facing exit
+criteria are met at implementation level. Run `P11` (timetable domain
+design) next. Clerk and managed PostgreSQL still need real configuration
+before sign-in and server migrations can be verified.
 
 ## Session log
 
@@ -327,4 +364,12 @@ configuration before sign-in and server migrations can be verified.
                                       route tests;
                                       157 tests pass;
                                       D028
+
+  2026-11-05        P10               Subject list/       P11 timetable
+                                      detail/create/     domain design
+                                      edit UI; URL-
+                                      scoped semester;
+                                      38 web / 171
+                                      total tests;
+                                      D029
   -----------------------------------------------------------------------

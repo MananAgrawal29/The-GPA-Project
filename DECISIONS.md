@@ -598,3 +598,38 @@ superseded and explain why.
     `user_id` should use the same composite pattern. The extra
     `semesters(id, user_id)` unique index is redundant to the primary key
     but deliberate: it is the target the composite key requires.
+
+## D029 --- Subject management is URL-scoped and keyed by semester
+
+-   **Date:** 2026-11-05
+-   **Decision:** P10 is a nested Academics screen, not a top-level
+    navigation module. `/academics/subjects` is the list and create view;
+    `/academics/subjects/:subjectId?semester=<id>` is the detail and edit
+    view. The selected semester is part of the URL. With no selection it
+    defaults to the active semester, then to the first semester when none
+    is active. Changing the selection returns to the list and unmounts the
+    previous semester's list/detail view, and the detail view also rejects
+    a response whose `semesterId` does not match the selected semester.
+-   **Identity and scope:** every API path is nested under the semester
+    id and every subject link uses the subject id, never the name. No
+    request carries an owner id; the server derives the owner from the
+    verified session. The UI exposes list, detail, create, and edit only.
+    It does not expose delete, even though the P09 API supports it,
+    because delete is outside the canonical P10 scope.
+-   **Reason:** a URL-addressable selection makes deep links and refreshes
+    deterministic, and keying the child views by semester makes stale
+    cross-semester rendering structurally impossible rather than a
+    timing-dependent cleanup. The active-first fallback matches the
+    "current semester" context P08 already established.
+-   **Rejected alternatives:** rendering subjects inside the existing
+    semester page with local selection state would make deep links and
+    detail routes unavailable and leave more cleanup paths to get wrong.
+    A global selected-semester context would add state outside the URL and
+    risk leaking one semester's view into another. Adding a top-level
+    Subjects navigation item would imply a module that does not exist
+    independently of Academics.
+-   **Implication:** later semester-scoped screens (timetable in
+    P13, attendance in P18/P20) should use the same URL selection and
+    keyed-view pattern unless a documented reason justifies a different
+    context. Optional subject metadata remains unassigned: P10 does not
+    add code, faculty, credits, colour, icon, or attendance targets.
