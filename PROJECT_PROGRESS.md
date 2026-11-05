@@ -1,10 +1,12 @@
 # Project Progress --- The GPA Project
 
-**Last updated:** 2026-10-23\
-**Current milestone:** P07 --- Semester data model\
+**Last updated:** 2026-10-24\
+**Current milestone:** P08 --- Semester management UI\
 **Overall status:** Runnable foundation with a responsive shell, a
-persisted and owner-scoped semester model, and a single reproducible
-quality gate. No authentication, no API endpoint, and no feature UI.
+persisted and owner-scoped semester model, the first authenticated API
+endpoints, and the first data-backed screen. Clerk is wired as the
+session boundary but no keys exist in this workspace, so sign-in itself
+remains unverified.
 
 ## Completed
 
@@ -36,19 +38,41 @@ quality gate. No authentication, no API endpoint, and no feature UI.
 -   [x] P07: Semester schema, committed migration, owner-scoped
     repository, and shared validation, tested against a real in-memory
     PostgreSQL. Recorded as D021--D024.
+-   [x] P08: Clerk session boundary, the first data endpoints, and the
+    semester management screen with explicit loading, empty,
+    validation, refusal, and failure states. Recorded as D025--D027.
 
 ## Foundation as built
 
 **Packages**
 
 -   `apps/web` --- React 19 + Vite 8 + Tailwind 4 + react-router 8.
-    Nine routes: Today, seven planned-module placeholders, and a
-    not-found page; ten tests.
+    Nine routes: Today, the Academics screen, six planned-module
+    placeholders, and a not-found page; 24 tests. Clerk renders only
+    when `VITE_CLERK_PUBLISHABLE_KEY` is set, so a keyless build ships
+    no auth code (D026).
 -   `apps/web/src/navigation.ts` --- single source of truth for the
     navigation groups, module routes, summaries, milestones, and status.
 -   `apps/api` --- Express 5 (ESM), env validation, `/health`, uniform
-    error envelope, the Drizzle schema, migrations, and the semester
-    repository. 61 tests.
+    error envelope, the Clerk session boundary, the semester routes,
+    the Drizzle schema, migrations, and the semester repository. 78
+    tests.
+
+**API and sign-in boundary (P08)**
+
+-   `apps/api/src/auth/session.ts` --- one `AuthBoundary`: Clerk's
+    middleware plus `getAuth()` when both keys exist, otherwise an
+    unconfigured boundary. No request field can name the owner (D025).
+-   `apps/api/src/semester-routes.ts` --- `GET`/`POST /semesters`,
+    `GET`/`PATCH /semesters/:id`, and `POST /semesters/:id/activate`,
+    each behind a single guard: 503 when auth or the database is not
+    configured, 401 when no verified identity resolves, then the
+    handler with the session's `userId` only.
+-   `apps/web/src/api/semesters.ts` --- typed client that sends no
+    owner id and parses every response with the shared schemas.
+-   `apps/web/src/pages/AcademicsPage.tsx` --- list, create, edit, and
+    activate, with explicit loading, empty, validation, refusal,
+    sign-in-required, and request-failure views (D027).
 -   `packages/shared` --- zod contracts (`healthResponseSchema`,
     `apiErrorSchema`, the semester field, patch, and record schemas),
     the semester date and status rules, `APP_NAME`, `APP_TAGLINE`; built
@@ -79,6 +103,9 @@ quality gate. No authentication, no API endpoint, and no feature UI.
 **Dependencies added (P07, exact pins)** `drizzle-orm` 0.45.4, `pg`
 8.23.1; dev: `drizzle-kit` 0.31.11, `@types/pg` 8.23.1,
 `@electric-sql/pglite` 0.5.11.
+
+**Dependencies added (P08, exact pins)** `@clerk/express` 2.1.82 (API);
+`@clerk/react` 6.18.0 and `zod` 4.6.7 (web).
 
 **Scripts (root)** `pnpm dev`, `pnpm build`, `pnpm typecheck`,
 `pnpm test`. Per package: `dev`, `build`, `typecheck`, `test`; the API
@@ -134,11 +161,16 @@ TypeScript 7 through `@typescript/native`.
 | `pnpm check` (P07) | **Exit 0** --- format, lint, typecheck, 71 tests (61 API, 10 web), build. The integration suite applies the committed migration and runs 29 database tests; 19 domain tests and 3 date-parser tests complete the API count. |
 | Migration applied (P07) | Applied to a fresh in-memory PostgreSQL 18 (PGlite) by the test suite; a second run is a no-op. The partial unique index, four `CHECK` constraints, both foreign keys, and per-user isolation all fail or pass as designed. **Never run against a PostgreSQL server** --- none is installed here. |
 | `db:migrate` guards (P07) | Exit 1 with a message naming `DATABASE_URL` when it is unset or malformed. No value is printed. |
+| `pnpm check` (P08) | **Exit 0** --- format, lint, typecheck, 102 tests (78 API, 24 web), build. The 17 new route tests drive the real Express app with an injected verifier (not Clerk); the 13 new web tests cover loading, empty, per-field validation, 401, 503, request failure, activation conflict, and the entry point itself. |
+| API process smoke (P08) | The real API started without Clerk keys and without `DATABASE_URL`: `/health` returned 200, and `GET`, `POST`, `PATCH`, and `POST /semesters/:id/activate` each returned **503 `auth_not_configured`**. The boot log names both missing pieces. |
+| Browser checks (P08) | Both dev servers up (`pnpm dev`, `PORT=3001`): `/semesters` through the Vite proxy returned 503 `auth_not_configured`, and `/academics` rendered the refusal state. The check found a real defect --- the rewritten `main.tsx` lacked `BrowserRouter`, so the app crashed at runtime while all component tests passed under `MemoryRouter`. Fixed, pinned by a new entry-point test proven failing on the broken file, and re-rendered with a clean console. |
 
 **Could not run:** a real GitHub Actions run (workflow validated locally
 only), a migration through `pg` against a PostgreSQL server (none is
-installed or provisioned), and any Clerk sign-in check (auth is not wired
---- D015). These are unavailable, not passing.
+installed or provisioned), and any real Clerk sign-in or token
+verification --- the boundary is wired (D025) but no Clerk keys exist,
+so the route tests inject a verifier instead. These are unavailable, not
+passing.
 
 ## Blockers / unknowns
 
@@ -152,7 +184,10 @@ installed or provisioned), and any Clerk sign-in check (auth is not wired
     works, `127.0.0.1` does not.
 -   Navigation is client-side, so the eventual host must rewrite
     unknown paths to `index.html`; nothing is deployed yet.
--   The shell makes no API request, so `VITE_API_BASE_URL` is unused.
+-   The web app calls same-origin paths (the Vite dev server proxies
+    `/semesters` and `/health` to port 3001), so `VITE_API_BASE_URL`
+    stays empty by default (D026); production must serve API and app
+    from one host.
 -   `Settings` is intentionally absent from navigation until a real
     setting exists, and calendar views live under Timetable until P16.
 -   `packages/shared` is built by a `prepare` script; a source change
@@ -168,17 +203,18 @@ installed or provisioned), and any Clerk sign-in check (auth is not wired
     only been applied to PGlite, and the managed-provider choice is still
     unconfirmed. `DATABASE_URL` stays optional at boot because no
     endpoint reads data yet.
--   Authentication is still absent, so the semester repository is not
-    exposed by any endpoint (D015). P08 needs that decision resolved or a
-    temporary local-owner path that does not pretend to be secure.
+-   Authentication is wired but unconfigured (D025): without Clerk
+    keys every data route refuses with 503 and no sign-in has ever run
+    end to end. Real keys are needed before the screen can be used with
+    real accounts.
 
 ## Next action
 
-Run `P08` from `MIMO_DAILY_PROMPTS.md`: build the semester management
-flows (create, edit, activate, archive, view) on the model and repository
-P07 added. Confirm how it will obtain an owner id before adding any
-endpoint, because D015 forbids reading user data without a verified
-session.
+Run `P09` from `MIMO_DAILY_PROMPTS.md`: semester-scoped subjects ---
+persistence and validation on the model P07 added, behind the same
+session boundary P08 built. Do not use a subject name alone as a unique
+identity. Clerk keys still need to be provisioned before sign-in can be
+verified for real (D025).
 
 ## Session log
 
@@ -236,4 +272,11 @@ session.
                                       repository, 71
                                       tests pass;
                                       D021--D024
+
+  2026-10-24        P08               Clerk boundary,    P09 semester-
+                                      first data         scoped
+                                      endpoints,         subjects
+                                      semester screen;
+                                      102 tests pass;
+                                      D025--D027
   -----------------------------------------------------------------------

@@ -1,7 +1,9 @@
 import {
+  activateSemesterInputSchema,
   createSemesterInputSchema,
   semesterInvariantIssues,
   semesterPatchSchema,
+  type ActivateSemesterInput,
   type CreateSemesterInput,
   type SemesterFields,
   type SemesterPatch,
@@ -59,6 +61,19 @@ export function parseCreateSemesterInput(input: unknown): CreateSemesterInput {
 /** Validates the shape of an edit payload. Cross-field rules run after merge. */
 export function parseSemesterPatch(input: unknown): SemesterPatch {
   const result = semesterPatchSchema.safeParse(input);
+
+  if (!result.success) {
+    throw toValidationError(result.error);
+  }
+
+  return result.data;
+}
+
+/** Validates what the caller says the outgoing semester becomes. */
+export function parseActivateSemesterInput(
+  input: unknown,
+): ActivateSemesterInput {
+  const result = activateSemesterInputSchema.safeParse(input);
 
   if (!result.success) {
     throw toValidationError(result.error);

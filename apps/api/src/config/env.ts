@@ -13,16 +13,19 @@ import { z } from "zod";
  * - Server-only values live here (`NODE_ENV`, `PORT`, `DATABASE_URL`,
  *   `CLERK_SECRET_KEY`). They must never be read by browser code or by
  *   `@gpa/shared`, which is bundled into the client.
- * - Clerk's *publishable* key is deliberately absent: the browser needs
- *   it, so it will be a `VITE_` variable when auth is wired. Only the
- *   secret key belongs on the server, where sessions are verified.
+ * - Clerk's keys are split by audience: the secret key never leaves the
+ *   server. The publishable key is public by construction and reaches the
+ *   browser as `VITE_CLERK_PUBLISHABLE_KEY`; it is validated here too
+ *   because Clerk's Express middleware needs the pair to verify a
+ *   session.
  *
- * `DATABASE_URL` stays optional because the API serves only `/health`
- * and no endpoint reads data yet; the migration script and any code that
- * opens the database require it and fail with a clear message when it is
- * missing (P07). `CLERK_SECRET_KEY` stays optional until sign-in is
- * wired. Requiring either at boot would push fake credentials into local
- * setup for no benefit.
+ * `DATABASE_URL` stays optional because the API must be able to boot for
+ * `/health` even without a database; the migration script and the data
+ * routes require it and refuse with a clear message when it is missing.
+ * `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` are optional for the
+ * same reason: the API boots and reports that user data is unavailable
+ * instead of failing to start. Requiring either at boot would push fake
+ * credentials into local setup for no benefit.
  */
 const envSchema = z.object({
   NODE_ENV: z
@@ -39,6 +42,15 @@ const envSchema = z.object({
 
   DATABASE_URL: z.url().optional(),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
+
+  /**
+   * Clerk's publishable key. Public by construction (it ships in the
+   * browser bundle), so it is not a secret; it is validated here only
+   * because the server-side middleware requires a matching pair. Both
+   * keys are optional: without them the API refuses to serve user data
+   * rather than trusting an unverified request.
+   */
+  CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

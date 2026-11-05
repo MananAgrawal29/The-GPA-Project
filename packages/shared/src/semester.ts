@@ -138,6 +138,19 @@ export const semesterPatchSchema = z.object({
 
 export type SemesterPatch = z.infer<typeof semesterPatchSchema>;
 
+/**
+ * Payload accepted when making a semester the current one.
+ *
+ * The outgoing semester must be told what it becomes, because
+ * "completed" asserts the term finished while "archived" only takes it
+ * out of the current context. The repository refuses to guess (D023).
+ */
+export const activateSemesterInputSchema = z.object({
+  demoteActiveTo: semesterStatusSchema.exclude(["active"]),
+});
+
+export type ActivateSemesterInput = z.infer<typeof activateSemesterInputSchema>;
+
 /** Identifier format for a semester, validated before it reaches SQL. */
 export const semesterIdSchema = z.uuid();
 

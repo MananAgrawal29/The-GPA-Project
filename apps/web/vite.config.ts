@@ -7,6 +7,13 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // The browser calls same-origin paths in development, so requests
+    // reach the API without CORS and without embedding an origin in the
+    // bundle. Production serves both from one host.
+    proxy: {
+      "/semesters": "http://localhost:3001",
+      "/health": "http://localhost:3001",
+    },
   },
   test: {
     environment: "jsdom",

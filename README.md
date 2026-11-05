@@ -4,12 +4,15 @@ This pack is the working source of truth for building **The GPA
 Project**, a personal college-management system with Mimo as the coding
 agent.
 
-**Repository status (2026-10-23):** a runnable workspace foundation
-exists. `apps/web` serves a responsive app shell whose navigation leads to
-honest placeholder pages, `apps/api` answers `GET /health` and owns a
-PostgreSQL schema with a committed migration for semesters, and
-`packages/shared` holds the contracts between them. There is still no
-authentication, no API endpoint for data, and no semester screen.
+**Repository status (2026-10-24):** a runnable workspace foundation
+exists. `apps/web` serves a responsive app shell; its Academics screen
+lists, creates, edits, and activates the signed-in student's semesters,
+and the remaining module routes are honest placeholders. `apps/api`
+answers `GET /health` and exposes the first data endpoints
+(`/semesters`) behind a Clerk session boundary; without Clerk keys
+configured it refuses every personal-data route with 503 rather than
+trusting an unverified caller. `packages/shared` holds the contracts
+between them. No GPA calculation exists yet.
 
 ## Files
 
@@ -70,21 +73,23 @@ No credentials are needed for either of those: the health check and the
 app shell run with no configuration at all. See **Configuration** below
 for the variables that exist and the one shell edge case.
 
-The shell has one real route today (`/`) plus a placeholder route per
-planned module (`/tasks`, `/timetable`, `/attendance`, `/academics`,
-`/exams`, `/gpa`, `/history`) and a not-found page. Every placeholder
-states that it is unbuilt; none of them shows data, a zero, or a control
-that does nothing.
+The shell has two real routes --- `/` (Today) and `/academics` (semester
+management) --- plus a placeholder route per planned module (`/tasks`,
+`/timetable`, `/attendance`, `/exams`, `/gpa`, `/history`) and a
+not-found page. Every placeholder states that it is unbuilt; none of
+them shows data, a zero, or a control that does nothing.
 
 **Layout**
 
 -   `apps/web` --- React, Vite, Tailwind, and `react-router`. Imports
-    `@gpa/shared` only. Every route and navigation entry is declared in
-    `src/navigation.ts`, so a link cannot point at a page that does not
-    exist.
--   `apps/api` --- Express, plus the Drizzle schema, migrations, and
-    owner-scoped repositories under `src/db`. Owns authorization once
-    auth exists.
+    `@gpa/shared` only for contracts. Every route and navigation entry
+    is declared in `src/navigation.ts`, so a link cannot point at a
+    page that does not exist. Calls the API through a typed client
+    (`src/api/semesters.ts`) that never sends an owner id.
+-   `apps/api` --- Express, plus the Clerk session boundary, the
+    semester routes, and the Drizzle schema, migrations, and
+    owner-scoped repositories under `src/db`. Owns authorization: no
+    route reads user data without a verified session (D025).
 -   `packages/shared` --- zod contracts and pure helpers. No runtime
     dependency other than zod.
 
@@ -134,14 +139,24 @@ the reason; values are never printed.
 |---|---|---|---|
 | `NODE_ENV` | API | no | `development` (default), `test`, `production`. |
 | `PORT` | API | no | Defaults to 3001. Valid range 1-65535; `0` is rejected. |
-| `DATABASE_URL` | API | only for data | PostgreSQL connection string. Required by `db:migrate` and by any code that opens the database; the API boots without it because no endpoint reads data yet. |
-| `CLERK_SECRET_KEY` | API | not yet | Reserved until sign-in lands (P07). Server-side only. |
-| `VITE_API_BASE_URL` | web | not yet | Reserved; no screen calls the API yet. Public by construction. |
+| `DATABASE_URL` | API | only for data | PostgreSQL connection string. Required by `db:migrate` and by any code that opens the database; the API boots without it and the data routes then refuse with 503. |
+| `CLERK_SECRET_KEY` | API | to enable sign-in | Clerk's server-side key. Together with `CLERK_PUBLISHABLE_KEY` it enables session verification (D025); alone it does nothing. |
+| `CLERK_PUBLISHABLE_KEY` | API | to enable sign-in | Clerk's public key; the middleware needs the matching pair. |
+| `VITE_API_BASE_URL` | web | no | Empty by default: in development the Vite dev server proxies `/semesters` and `/health` to port 3001 (D026). |
+| `VITE_CLERK_PUBLISHABLE_KEY` | web | no | Clerk's publishable key for the browser. Without it the app ships no auth code and the Academics screen says sign-in is not configured. |
 
 Copy the root [.env.example](.env.example) to `.env` for local work; the
 file is optional and gitignored. Real environment variables always take
 precedence over `.env`, which keeps deployment configuration
 authoritative.
+
+**Sign-in is optional locally, never faked.** With no Clerk keys the
+API boots, `/health` answers, and every `/semesters` route refuses with
+503 `auth_not_configured`; the web app runs without loading Clerk and
+the Academics screen states that sign-in is unavailable. To exercise
+sign-in, set both server keys plus `VITE_CLERK_PUBLISHABLE_KEY` in
+`apps/web/.env`. No end-to-end sign-in has been verified in this
+workspace --- there is no Clerk instance here (D025).
 
 Tests and shared tooling need no variables at all: API tests build an
 environment object in-process, bind an ephemeral port, and create their

@@ -1,6 +1,7 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import {
   semesterIdSchema,
+  type ActivateSemesterInput,
   type Semester,
   type SemesterFields,
   type SemesterStatus,
@@ -18,8 +19,13 @@ import { semesters, type SemesterRow } from "./schema.js";
 
 const ONE_ACTIVE_CONSTRAINT = "semesters_one_active_per_user";
 
-/** Status the previously active semester takes when another is activated. */
-export type ActiveDemotionStatus = Exclude<SemesterStatus, "active">;
+/**
+ * Status the previously active semester takes when another is activated.
+ *
+ * Derived from the shared contract so the HTTP layer and the repository
+ * cannot disagree about which statuses are legal targets.
+ */
+export type ActiveDemotionStatus = ActivateSemesterInput["demoteActiveTo"];
 
 /** A user already has a different active semester. */
 export class ActiveSemesterConflictError extends Error {

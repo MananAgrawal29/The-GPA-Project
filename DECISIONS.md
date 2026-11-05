@@ -467,3 +467,100 @@ superseded and explain why.
     place, not instants, and will need their own decision; nothing here
     commits them to UTC. Any future column that holds a calendar date
     must use `date` and must not be routed through a `Date` object.
+
+## D025 --- User data requires a verified Clerk session (D015 resolved)
+
+-   **Date:** 2026-10-24
+-   **Decision:** The first data endpoints (`/semesters`) sit behind one
+    server-side boundary, `apps/api/src/auth/session.ts`. When
+    `CLERK_SECRET_KEY` **and** `CLERK_PUBLISHABLE_KEY` are both present,
+    `clerkMiddleware()` from `@clerk/express` 2.1.82 verifies the session
+    before any body parser or handler runs, and `getAuth()` reads the
+    result. The `userId` handed to the repository comes from that
+    verified subject and from nowhere else: no header, query parameter,
+    body field, or client-side variable can name the owner.
+-   **Honest degradation:** without both keys the boundary reports
+    `configured: false` and every semester route answers **503
+    `auth_not_configured`**; without `DATABASE_URL` they answer **503
+    `database_not_configured`**; a configured server receiving a request
+    with no session answers **401 `unauthenticated`**. An empty resolved
+    identity counts as no identity, so a boundary that returned `""`
+    could never become an owner id that every query silently matches.
+    `GET /health` keeps working in all three cases, and the boot log
+    says plainly which piece is missing.
+-   **Reason:** D015 forbade reading user data without a verified
+    session while P08 needed semester endpoints for its UI. The options
+    were a fake local owner (a production-shaped lie), unauthenticated
+    endpoints (a real hole), or building the boundary. Only the third
+    satisfies the rule.
+-   **Rejected alternatives:** a `?userId=` or `X-User-Id` development
+    header --- rejected because a client-supplied id is exactly what
+    D009/D022 forbid and it would be hard to remove later; failing boot
+    when Clerk keys are absent --- rejected because `/health`, the app
+    shell, tests, and CI must run with no credentials (D016 keeps the
+    API bootable); mounting verification inside individual routes ---
+    rejected because one wrapper at registration cannot be forgotten by
+    the next endpoint.
+-   **Limitation:** no real Clerk instance exists in this workspace, so
+    nothing has verified a token against Clerk's servers. The HTTP tests
+    inject a stub boundary whose verifier reads a test-only header (a
+    fixture, never read by production code), and the unconfigured path
+    is exercised against the real process. Real sign-in and two-account
+    isolation over HTTP remain unverified until real keys exist.
+-   **Implication:** every new data route must use the same `guarded`
+    wrapper; a route registered outside it is a bug. Setting only one
+    Clerk key does not enable sign-in, and the client must keep sending
+    no owner id of any kind.
+
+## D026 --- The browser calls same-origin paths, and Clerk loads only with a key
+
+-   **Date:** 2026-10-24
+-   **Decision:** The web app embeds no API origin by default:
+    `VITE_API_BASE_URL` is empty, and the Vite dev server proxies
+    `/semesters` and `/health` to `http://localhost:3001`, so requests
+    are same-origin in development and same-host in production --- no
+    CORS, no origin to misconfigure. `main.tsx` reads the Clerk
+    publishable key: when it is absent the app renders with no auth SDK
+    at all (the provider is a dynamic import, so a keyless build ships
+    no Clerk code), and `AcademicsPage` lazy-loads Clerk's `SignIn` only
+    for the view that needs it.
+-   **Reason:** an origin baked into the bundle is a second
+    configuration surface that breaks silently in exactly the
+    environment that differs; and loading an auth SDK nobody configured
+    would make the app look like it has sign-in when it does not.
+-   **Implication:** production should serve the API and the static app
+    from one host --- the proxy exists for `pnpm dev` only. Without a
+    publishable key the Academics screen states that sign-in is not
+    configured instead of rendering a form whose saves would fail.
+
+## D027 --- Every semester API failure has a state the UI must show
+
+-   **Date:** 2026-10-24
+-   **Decision:** Five routes: `GET /semesters` (list), `POST
+    /semesters` (201), `GET /semesters/:id`, `PATCH /semesters/:id`, and
+    `POST /semesters/:id/activate`. Failures map one-to-one to states:
+    `422 validation_failed` carries per-field `issues`, `409
+    active_semester_conflict` marks two activations racing, `404
+    semester_not_found` covers a missing **or foreign** row (D022), `401`
+    means no session, and `503` means the server cannot verify a session
+    or reach the database. The client parses every response against the
+    shared zod schemas, and `AcademicsPage` has an explicit view for
+    loading, empty, validation error, refusal, sign-in required, and
+    request failure --- never an empty list standing in for a failed
+    request.
+-   **Activation wording (the choice D023 left to P08):** the UI asks
+    what the outgoing semester becomes and offers exactly the three
+    legal targets --- archive (default), mark completed, return to draft
+    --- each labelled with what it means. The repository still demotes
+    the outgoing row before promoting the target in one transaction, so
+    a duplicate submit or stale click either no-ops (already active) or
+    fails with `409`, and the page blocks resubmission while a request
+    is in flight.
+-   **Reason:** a foreign row must read as absent while a genuine race
+    must not masquerade as one, and activation must not silently guess
+    what the outgoing semester becomes --- the refusal D023 made
+    explicit.
+-   **Implication:** the web tests cover each view state and the API
+    tests cover guards, validation, conflict, and two-owner isolation,
+    but both use the injected boundary (D025). None of them prove Clerk
+    verification itself.

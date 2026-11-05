@@ -85,19 +85,6 @@ export const plannedModules: readonly PlannedModule[] = [
     ],
   },
   {
-    path: "/academics",
-    label: "Academics",
-    group: "workspace",
-    status: "planned",
-    milestone: "P07–P10",
-    summary: "Semesters and the subjects that belong to them.",
-    planned: [
-      "Create, activate, and archive a semester without losing earlier ones",
-      "Subjects scoped to a semester, so a repeated name stays a separate subject",
-      "Changing the active semester never mixes two semesters' data",
-    ],
-  },
-  {
     path: "/exams",
     label: "Exams",
     group: "later",
@@ -141,11 +128,23 @@ export const plannedModules: readonly PlannedModule[] = [
 
 const today: NavigationItem = { path: "/", label: "Today" };
 
+/**
+ * Modules that have a real screen.
+ *
+ * A module moves out of `plannedModules` and into this list in the same
+ * change that replaces its placeholder page, so the navigation never
+ * claims a screen exists before it does (D020).
+ */
+export const builtModules: readonly NavigationItem[] = [
+  { path: "/academics", label: "Academics" },
+];
+
 export const navigationGroups: readonly NavigationGroup[] = [
   {
     label: "Workspace",
     items: [
       today,
+      ...builtModules,
       ...plannedModules.filter((module) => module.group === "workspace"),
     ],
   },

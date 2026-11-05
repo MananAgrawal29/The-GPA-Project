@@ -2,7 +2,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
-import { plannedModules } from "./navigation";
+import { navigationGroups, plannedModules } from "./navigation";
 
 function renderApp(path = "/") {
   return render(
@@ -25,18 +25,30 @@ describe("app shell", () => {
     expect(screen.getAllByText("The GPA Project").length).toBeGreaterThan(0);
   });
 
-  it("links every planned module, and only real routes", () => {
+  it("links every module, and only real routes", () => {
     renderApp("/");
 
     const nav = screen.getByRole("navigation");
 
-    for (const module of plannedModules) {
-      const link = within(nav).getByRole("link", {
-        name: new RegExp(`^${module.label}`),
-      });
+    for (const group of navigationGroups) {
+      for (const item of group.items) {
+        const link = within(nav).getByRole("link", {
+          name: new RegExp(`^${item.label}`),
+        });
 
-      expect(link.getAttribute("href")).toBe(module.path);
+        expect(link.getAttribute("href")).toBe(item.path);
+      }
     }
+  });
+
+  it("renders the academics screen in place of its old placeholder", async () => {
+    renderApp("/academics");
+
+    const heading = screen.getAllByRole("heading", { level: 1 });
+
+    expect(heading).toHaveLength(1);
+    expect(heading[0]?.textContent).toBe("Academics");
+    expect(screen.queryByText(/Not built yet/i)).toBeNull();
   });
 
   it("marks the current route without marking the others", () => {

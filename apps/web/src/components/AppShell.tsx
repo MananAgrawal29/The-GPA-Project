@@ -140,7 +140,8 @@ export default function AppShell({ children }: AppShellProps) {
           </nav>
 
           <p className="px-3 text-[11px] leading-relaxed text-slate-600">
-            Foundation shell. No account, no database, and no saved records yet.
+            Records belong to your account. Screens that read data say so when
+            sign-in is not available.
           </p>
         </aside>
 

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export {
   SEMESTER_STATUSES,
+  activateSemesterInputSchema,
   createSemesterInputSchema,
   semesterFieldsSchema,
   semesterIdSchema,
@@ -12,6 +13,7 @@ export {
 } from "./semester.js";
 
 export type {
+  ActivateSemesterInput,
   CreateSemesterInput,
   Semester,
   SemesterFields,
@@ -40,11 +42,25 @@ export const healthResponseSchema = z.object({
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
-/** Uniform error envelope used by every API route. */
+/** One problem with a named field, reported alongside an error. */
+export const fieldIssueSchema = z.object({
+  path: z.string().min(1),
+  message: z.string().min(1),
+});
+
+export type FieldIssue = z.infer<typeof fieldIssueSchema>;
+
+/**
+ * Uniform error envelope used by every API route.
+ *
+ * `issues` appears only on validation failures, so the same envelope can
+ * report a 404 and a 422 without the client guessing which shape it has.
+ */
 export const apiErrorSchema = z.object({
   error: z.object({
     code: z.string().min(1),
     message: z.string().min(1),
+    issues: z.array(fieldIssueSchema).optional(),
   }),
 });
 

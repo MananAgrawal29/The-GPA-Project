@@ -307,3 +307,85 @@ new entries that reference the earlier one.
     beyond the status field, and activation requires the caller to say
     what the outgoing semester becomes, which P08 must ask in the UI.
 -   **Follow-up:** Run P08 semester management UI.
+
+------------------------------------------------------------------------
+
+## 2026-10-24 --- P08: Semester management UI
+
+-   **Change:** The first data-backed screen exists. `/academics` lists
+    the signed-in student's semesters, creates one, edits its details,
+    and makes it the current semester, with explicit states for loading,
+    empty, validation error, server refusal, sign-in required, and a
+    request that failed outright. The API exposes its first endpoints
+    (`GET`/`POST /semesters`, `GET`/`PATCH /semesters/:id`, and
+    `POST /semesters/:id/activate`) behind a Clerk session boundary; no
+    route reads or writes user data without a verified session, and no
+    request can name an owner. No GPA rule, calculation, or
+    institution-specific behaviour was added.
+-   **Implementation:** API --- added `@clerk/express` 2.1.82 (exact
+    pin) and `src/auth/session.ts`, which builds one `AuthBoundary`:
+    `clerkMiddleware()` plus `getAuth()` when both Clerk keys exist,
+    otherwise a boundary that reports itself unconfigured. `app.ts`
+    mounts the middleware before body parsing and registers the routes;
+    `config/env.ts` now validates `CLERK_PUBLISHABLE_KEY` alongside
+    `CLERK_SECRET_KEY` (both optional, both present to enable sign-in);
+    `index.ts` builds the boundary from the validated env and logs
+    plainly when Clerk or `DATABASE_URL` is missing.
+    `semester-routes.ts` guards every handler with one wrapper that
+    answers 503 (auth or database not configured) or 401 (no verified
+    identity, including an empty one) before running the handler with
+    the verified `userId`. Domain and repository gained a validated
+    activation input so the HTTP layer and the repository share one
+    list of legal demotion targets; `packages/shared` exports the
+    activation schema and the field-issue contract the client needed.
+    Web --- added `src/api/semesters.ts`, a typed client that sends no
+    owner id and parses every response with the shared schemas;
+    `pages/AcademicsPage.tsx` with create, edit, activate (an explicit
+    "what happens to the outgoing semester" choice) and the six view
+    states; `navigation.ts` gained a `builtModules` list so Academics
+    moved out of the planned set in the same change that replaced its
+    placeholder page; `main.tsx` renders with Clerk only when
+    `VITE_CLERK_PUBLISHABLE_KEY` exists (dynamic import, so a keyless
+    build ships no auth SDK); `vite.config.ts` proxies `/semesters` and
+    `/health` to the API so the browser calls same-origin paths; both
+    `.env.example` files document the new variables. Dependencies added
+    with exact pins: `@clerk/express` 2.1.82 (API), `@clerk/react`
+    6.18.0 and `zod` 4.6.7 (web). Recorded D025--D027.
+-   **Verification:** `pnpm check` exit 0 --- `format:check`, `lint`,
+    `typecheck`, `test`, `build`. Tests: 102 total (78 API, 24 web).
+    The 17 new route tests run the real Express app against the
+    in-memory PostgreSQL with an **injected** boundary (a stub verifier,
+    not Clerk): they prove an unconfigured server refuses with 503, a
+    missing identity refuses with 401, validation failures return 422
+    with field issues, a racing activation returns 409, a foreign row
+    reads as 404, and two owners cannot see or touch each other's
+    semesters.    The 13 new web tests drive the page through loading,
+    empty, per-field validation errors, 401, 503, network failure, and
+    create, edit, activate success and conflict, plus an entry-point
+    test that boots `main.tsx` itself. That test exists because a
+    browser check of the running dev servers found a real defect the
+    suite had missed: the rewritten `main.tsx` had dropped the
+    `BrowserRouter` wrapper, so the shipped app crashed with
+    `useLocation() outside a Router` while every component test passed
+    under its own `MemoryRouter`. The router was restored, the
+    regression test was confirmed failing against the broken file and
+    passing against the fixed one, and the reloaded page then rendered
+    the Academics screen with a clean console. Separately, the real
+    API process was started without Clerk keys and without
+    `DATABASE_URL`: `GET /health` returned 200, and `GET`, `POST`,
+    `PATCH`, and `POST /semesters/:id/activate` each returned 503
+    `auth_not_configured`, with the boot log naming both missing
+    pieces.
+-   **Data/migration impact:** None. No schema or migration change;
+    P07's tables, index, and constraints are used exactly as written.
+-   **Known limitations:** No real Clerk instance exists here, so no
+    token has ever been verified against Clerk and no browser sign-in
+    has run --- the route tests inject a verifier, and the 503 refusal
+    was exercised against the real process, neither of which is
+    end-to-end authentication. No PostgreSQL server exists either, so
+    database-backed tests still run on PGlite rather than a server. The
+    Vite proxy is a development convenience: production must serve the
+    API and the static app from one host. Duplicate-submit protection
+    is in-flight blocking in the UI plus the server's 409; there is no
+    idempotency key.
+-   **Follow-up:** Run P09 semester-scoped subjects.
