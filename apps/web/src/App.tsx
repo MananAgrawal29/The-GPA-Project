@@ -5,6 +5,7 @@ import AcademicsPage from "./pages/AcademicsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PlannedModulePage from "./pages/PlannedModulePage";
 import SubjectsPage from "./pages/SubjectsPage";
+import TimetablePage from "./pages/TimetablePage";
 import TodayPage from "./pages/TodayPage";
 
 /**
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/" element={<TodayPage />} />
         <Route path="/academics" element={<AcademicsPage />} />
         <Route path="/academics/subjects" element={<SubjectsPage />} />
+        <Route path="/timetable" element={<TimetablePage />} />
         <Route
           path="/academics/subjects/:subjectId"
           element={<SubjectsPage />}

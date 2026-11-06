@@ -16,8 +16,9 @@ complete through P10 in code and tests: semesters and semester-scoped
 subjects have persisted models, authenticated APIs, and management
 screens. Real Clerk sign-in and server migration verification remain
 environment limitations. Phase 3 design (P11) and recurring slot
-persistence (P12) are complete; the timetable editor starts at P13. See
-`PROJECT_PROGRESS.md` for the verified detail.
+persistence (P12) are complete, and the timetable editor (P13) is
+complete with authenticated routes, a weekly editor screen, and tests.
+See `PROJECT_PROGRESS.md` for the verified detail.
 
 ## Phase 0 --- Understand the repository (P00--P02)
 

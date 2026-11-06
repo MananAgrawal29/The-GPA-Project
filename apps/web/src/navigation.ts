@@ -57,20 +57,6 @@ export const plannedModules: readonly PlannedModule[] = [
     ],
   },
   {
-    path: "/timetable",
-    label: "Timetable",
-    group: "workspace",
-    status: "planned",
-    milestone: "P11–P16",
-    summary:
-      "The weekly pattern entered once, and the dated exceptions that never rewrite it.",
-    planned: [
-      "Recurring weekly slots for the active semester",
-      "Holidays and one-day special schedules, stored per date",
-      "Weekly and calendar views, with recurring rules kept visually distinct from dated classes",
-    ],
-  },
-  {
     path: "/attendance",
     label: "Attendance",
     group: "workspace",
@@ -137,6 +123,7 @@ const today: NavigationItem = { path: "/", label: "Today" };
  */
 export const builtModules: readonly NavigationItem[] = [
   { path: "/academics", label: "Academics" },
+  { path: "/timetable", label: "Timetable" },
 ];
 
 export const navigationGroups: readonly NavigationGroup[] = [

@@ -1,13 +1,13 @@
 # Project Progress --- The GPA Project
 
 **Last updated:** 2026-11-06\
-**Current milestone:** P12 --- Recurring timetable slot persistence (complete)\
+**Current milestone:** P13 --- Timetable API and weekly editor (complete)\
 **Overall status:** Runnable foundation with a responsive shell, an
-owner-scoped semester and subject model, authenticated subject CRUD API
-endpoints, forward migrations, database-backed tests, a semester-scoped
-subject management screen, and persisted recurring timetable slots with
-validated ownership and overlap rules. Timetable slots have no API or UI
-yet. Real Clerk/database verification remains outstanding.
+owner-scoped semester and subject model, authenticated subject and
+timetable slot CRUD API endpoints, forward migrations, database-backed
+tests, a semester-scoped subject management screen, and a semester-scoped
+weekly timetable editor with persistent recurring slots. Real
+Clerk/database verification remains outstanding.
 
 ## Completed
 
@@ -58,6 +58,15 @@ yet. Real Clerk/database verification remains outstanding.
     migration, a shared contract, server-side validation, and an
     owner-scoped repository whose writes lock the semester and reject
     overlapping live slots. Recorded as D036; 66 new tests.
+-   [x] P13: Authenticated, semester-scoped timetable slot API routes
+    (list, get, create, update, delete) reusing the P12 repository and
+    domain, plus a weekly timetable editor screen integrated with the
+    selected semester and its subjects. The editor groups slots by
+    weekday, supports create/edit/delete with client and server
+    validation, overlap rejection, loading/empty/success/error states,
+    and query refresh after mutations. No dated occurrences, exceptions,
+    or attendance. Recorded as D030--D036; 27 new API route tests and 12
+    new web editor tests.
 
 ## Foundation as built
 
@@ -65,15 +74,16 @@ yet. Real Clerk/database verification remains outstanding.
 
 -   `apps/web` --- React 19 + Vite 8 + Tailwind 4 + react-router 8.
     Eleven routes: Today, Academics, the subject list and detail screens,
-    six planned-module placeholders, and a not-found page; 38 tests.
-    Clerk renders only when `VITE_CLERK_PUBLISHABLE_KEY` is set, so a
-    keyless build ships no auth code (D026).
+    the weekly timetable editor, six planned-module placeholders, and a
+    not-found page; 50 tests. Clerk renders only when
+    `VITE_CLERK_PUBLISHABLE_KEY` is set, so a keyless build ships no auth
+    code (D026).
 -   `apps/web/src/navigation.ts` --- single source of truth for the
     navigation groups, module routes, summaries, milestones, and status.
 -   `apps/api` --- Express 5 (ESM), env validation, `/health`, uniform
     error envelope, the Clerk session boundary, semester and subject
-    routes, the Drizzle schema, migrations, and the semester, subject,
-    and timetable slot repositories. 199 tests.
+    routes, timetable slot routes, the Drizzle schema, migrations, and
+    the semester, subject, and timetable slot repositories. 226 tests.
 
 **API and sign-in boundary (P08)**
 
@@ -245,9 +255,51 @@ yet. Real Clerk/database verification remains outstanding.
 -   Times cross the contract as `HH:MM`; PostgreSQL's `HH:MM:SS` is
     truncated on read and never parsed into a `Date` (D034).
 -   No route or screen is exposed yet. P13 owns the editor and its HTTP
-    surface.
+    surface and has since added them (see below).
 -   Tests: 32 domain tests and 34 repository/migration tests, all against
     PGlite and the committed migration.
+
+**Timetable API and weekly editor (P13)**
+
+-   `apps/api/src/timetable-routes.ts` --- nested
+    `/semesters/:semesterId/timetable-slots` routes (`GET` list, `GET`
+    one, `POST` create, `PATCH` update, `DELETE` remove) behind the same
+    guard as P08/P09: 503 when auth or the database is missing, 401
+    without a verified session, 404 for a missing/foreign semester or
+    slot (ownership mismatch is reported as absent, never disclosed), and
+    422 with field issues for invalid input. Every handler reuses the
+    P12 repository and domain functions; no direct database writes and no
+    second source of truth.
+-   `apps/api/src/app.ts` --- registers the timetable slot routes
+    alongside the semester and subject routes.
+-   `apps/web/src/api/timetable.ts` --- typed client for list, read,
+    create, update, and delete. Every path carries the semester id; a
+    slot is addressed by its id, never by its day or time, and no request
+    carries an owner id. Responses are parsed with the shared timetable
+    slot schemas.
+-   `apps/web/src/pages/TimetablePage.tsx` --- weekly editor. Slots are
+    grouped by weekday (Monday--Sunday), each showing subject, time
+    range, room, class type, and active dates. Create and edit open a
+    shared form validated with the shared slot schema (client issues plus
+    server 422 issues). Delete confirms before calling the API. Overlap
+    is rejected with a 409; adjacent slots are accepted. Loading, empty,
+    validation, success, and error states are handled; queries refresh
+    after every mutation. Archived slots are readable but not listed for
+    deletion, matching P12's archive policy. Dated occurrences,
+    exceptions, and attendance are out of scope (P14/P15/P17).
+-   `apps/web/src/App.tsx` and `apps/web/src/navigation.ts` --- the
+    `/timetable` route is built and promoted from planned to built.
+-   Tests: 27 new API route tests cover authenticated/unauthenticated
+    access, semester ownership isolation, subject ownership and semester
+    relationship, valid creation and updates, invalid payloads and
+    malformed ids, overlap rejection, adjacent slot acceptance, archived
+    slot behavior, delete behavior, and consistent error responses. 12
+    new web editor tests cover rendering, selected-semester integration,
+    empty and loading states, create and edit, validation errors, mutation
+    success and failure, query refresh, and no cross-semester leakage.
+    PGlite-backed API tests cannot initialize in this environment (the
+    same pre-existing limitation affects all P11/P12 PGlite suites), so
+    they are typechecked but not executed here.
 
 **Dependencies added (P07, exact pins)** `drizzle-orm` 0.45.4, `pg`
 8.23.1; dev: `drizzle-kit` 0.31.11, `@types/pg` 8.23.1,

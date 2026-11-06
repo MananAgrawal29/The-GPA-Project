@@ -564,3 +564,47 @@ new entries that reference the earlier one.
 -   **Follow-up:** Run P13 timetable editor against these repository
     functions, adding its authenticated routes and the semester-scoped
     weekly UI. Do not begin P14 or P15.
+
+-----------------------------------------------------------------------
+
+## 2026-11-06 --- P13: Timetable API and weekly editor
+
+-   **Change:** Added authenticated, semester-scoped timetable slot API
+    routes (list, get, create, update, delete) and a weekly timetable
+    editor screen. Slots are grouped by weekday, support create/edit/
+    delete with client and server validation, overlap rejection, and
+    loading/empty/success/error states. No dated occurrences, exceptions,
+    holidays, or attendance.
+-   **Implementation:** `apps/api/src/timetable-routes.ts` reuses the P12
+    repository (`createTimetableSlot`, `getTimetableSlot`,
+    `listTimetableSlots`, `updateTimetableSlot`, `deleteTimetableSlot`)
+    and domain (`TimetableSlotValidationError`,
+    `TimetableSlotOwnershipError`, `TimetableSlotOverlapError`) with no
+    direct database writes and no second source of truth. Every route is
+    behind a guard that resolves the owner only from the verified Clerk
+    session (never a client-supplied user id), scopes to the requested
+    semester, reports missing/foreign records as 404 without disclosing
+    ownership, maps validation errors to 422, overlap to 409, and
+    refuses with 503 when auth or the database is unconfigured (D015).
+    `apps/api/src/app.ts` registers the routes. `apps/web/src/api/timetable.ts`
+    is the typed client; `apps/web/src/pages/TimetablePage.tsx` is the
+    editor integrated with the selected semester and its subjects;
+    `apps/web/src/App.tsx` and `apps/web/src/navigation.ts` promote
+    `/timetable` from planned to built.
+-   **Verification:** `pnpm format:check`, `pnpm lint`, `pnpm typecheck`,
+    `pnpm build` all exit 0. Web tests: 50 pass (12 new editor tests).
+    API route tests (27 new) are typechecked but not executed because
+    PGlite cannot initialize in this environment — the same pre-existing
+    limitation affects all P11/P12 PGlite suites. Real Clerk and server
+    PostgreSQL verification remains outstanding.
+-   **Data/migration impact:** None. Reuses the P12 `timetable_slots`
+    schema and migration (`0002`); no new migration.
+-   **Known limitations:** PGlite-backed API tests cannot run in this
+    environment. Archived slots are readable via GET but are not listed
+    for deletion in the editor, matching P12's archive policy. A subject
+    in use by a slot cannot be deleted (`ON DELETE RESTRICT`), and the
+    existing subject-delete endpoint still has no 409 mapping for that
+    rejection — recorded as a follow-up, not silently expanded into P13.
+-   **Follow-up:** Record the subject-delete `ON DELETE RESTRICT` → 409
+    mapping as a P13-adjacent follow-up; begin P14 (date exceptions)
+    only after P13 is verified against a real database.

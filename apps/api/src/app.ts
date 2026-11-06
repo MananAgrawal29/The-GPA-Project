@@ -9,6 +9,7 @@ import { unconfiguredAuth, type AuthBoundary } from "./auth/session.js";
 import type { Database } from "./db/client.js";
 import { registerSemesterRoutes } from "./semester-routes.js";
 import { registerSubjectRoutes } from "./subject-routes.js";
+import { registerTimetableSlotRoutes } from "./timetable-routes.js";
 
 export interface AppOptions {
   /**
@@ -42,6 +43,7 @@ export function createApp(options: AppOptions = {}): Express {
 
   registerSemesterRoutes(app, { auth, database: options.database });
   registerSubjectRoutes(app, { auth, database: options.database });
+  registerTimetableSlotRoutes(app, { auth, database: options.database });
 
   app.get("/health", (_request: Request, response: Response) => {
     // Parsed through the shared schema so the producer cannot drift from
