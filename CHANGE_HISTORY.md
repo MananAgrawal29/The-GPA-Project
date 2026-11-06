@@ -469,3 +469,56 @@ new entries that reference the earlier one.
 -   **Follow-up:** Run P11 timetable domain design. Do not begin P12
     persistence until the recurring-slot and dated-occurrence model is
     recorded.
+
+------------------------------------------------------------------------
+
+## 2026-11-06 --- P11: Timetable domain design
+
+-   **Change:** Designed the timetable domain on top of the existing
+    semester and subject model and recorded it as D030--D035. Recurring
+    weekly slots, date-scoped exceptions, and dated class occurrences are
+    three separate layers; no timetable table, endpoint, or UI was
+    added, because P11 is a design milestone and P12 owns persistence.
+-   **Design summary:** `timetable_slots` (P12) is a weekly rule with a
+    required subject, ISO weekday 1--7, wall-clock `time` start/end, an
+    optional room, a class type, and optional effective dates inside the
+    semester. `day_exceptions` plus `day_exception_slots` (P14) hold at
+    most one holiday or special schedule per semester date and own that
+    day's one-off classes, so a date exception never edits a recurring
+    row. `class_occurrences` (P15) stores a snapshot of date, times,
+    room, class type, and subject id with a nullable source slot or
+    one-off slot, and a `scheduled`/`cancelled` status only. Generation
+    is on demand for an explicit range and idempotent through partial
+    unique indexes over the source and date, so a repeated run inserts
+    nothing and never rewrites history.
+-   **Decisions recorded:** D030 layer boundaries; D031 slot shape,
+    weekday and time validation, effective ranges, and the overlap
+    policy; D032 the occurrence snapshot, narrowed status, and
+    idempotent generation; D033 one exception per date and the
+    holiday/special-schedule kinds; D034 wall-clock time and client-owned
+    "today"; D035 composite ownership keys, RESTRICT references, and
+    archiving instead of cascading deletion.
+-   **Ambiguities resolved and flagged:** MAIN_PLAN's occurrence status
+    `completed` is not stored, because whether a class was held is an
+    attendance fact for P17; the plan's `cancelled_classes` and `other`
+    exception kinds are not adopted, because a holiday with a reason
+    already expresses "no classes" and `other` has no defined behaviour.
+    Adding either later is additive. MAIN_PLAN's optional
+    `activeFrom`/`activeTo` is kept, because without it a slot added
+    mid-semester would generate classes for the weeks before it existed.
+-   **Verification:** No application code, schema, or migration changed,
+    so the existing suite is the regression check. See
+    `PROJECT_PROGRESS.md` for the result of the `pnpm check` run.
+-   **Data/migration impact:** None in this milestone. D035 specifies
+    the forward, additive constraints P12 will add, and no existing
+    table, row, or migration file was modified.
+-   **Known limitations:** Overlap prevention is repository-level under a
+    per-semester lock plus an exact-duplicate unique index; a PostgreSQL
+    `EXCLUDE` constraint would need the unverified `btree_gist`
+    extension. Times are wall-clock with no per-user timezone, and
+    overnight classes are out of scope. Attendance states, attendance
+    formulas, manual one-off classes, alternating-week patterns, and all
+    timetable UI remain for later milestones.
+-   **Follow-up:** Run P12 timetable persistence exactly against
+    D030--D035, adding the recurring slot table and its migration. Do not
+    begin P13 or P14.

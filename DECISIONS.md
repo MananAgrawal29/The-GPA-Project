@@ -633,3 +633,225 @@ superseded and explain why.
     keyed-view pattern unless a documented reason justifies a different
     context. Optional subject metadata remains unassigned: P10 does not
     add code, faculty, credits, colour, icon, or attendance targets.
+
+## D030 --- The timetable has three layers, and a rule never holds a date
+
+-   **Date:** 2026-11-06
+-   **Decision:** The timetable is four relational shapes, each added by
+    the milestone that needs it: `timetable_slots` (a recurring weekly
+    rule, P12), `day_exceptions` plus `day_exception_slots` (a
+    date-scoped holiday or special day, P14), and `class_occurrences`
+    (one dated, planned class, P15). A slot carries a weekday and
+    wall-clock times and never a calendar date; an occurrence carries a
+    date and its own copied times and never a weekday rule. Attendance
+    (P17) will reference an occurrence, never a slot.
+-   **Reason:** `AGENT_INSTRUCTIONS.md` section 4 and MAIN_PLAN section
+    7 require timetable rules, dated classes, and attendance to stay
+    separate, and D004/D005 require a holiday or one-off schedule to
+    leave the weekly timetable untouched. One table with a nullable date
+    and a recurrence flag would be both a rule and an event, so a single
+    holiday could be stored by editing the weekly row --- exactly the
+    mutation those decisions forbid.
+-   **Rejected alternatives:** one `classes` table with a
+    `recurring boolean` would force every query to filter on which mode
+    it is in and give the same class two identities; generating dated
+    classes at read time with no stored occurrence would leave
+    attendance (P17) without a stable row to point at and let a past
+    class change when a slot is edited; storing exceptions as dated
+    slot rows collapses the layers the same way.
+-   **Implication:** editing a slot can never rewrite an occurrence, and
+    cancelling a date never touches a slot. P13 edits slots, P14 edits
+    exceptions, and P16 reads both while labelling which is which. A
+    feature that seems to need a date on a slot is really asking for an
+    exception or an occurrence.
+
+## D031 --- A slot is a weekly wall-clock rule with a subject and an effective range
+
+-   **Date:** 2026-11-06
+-   **Decision:** `timetable_slots` stores `id`, `semester_id`,
+    `user_id`, `subject_id`, `day_of_week` (smallint, ISO 1--7,
+    Monday = 1, matching PostgreSQL `isodow`), `start_time`/`end_time`
+    (`time` without time zone), optional `room` (trimmed, 1--80
+    characters), `class_type` (`lecture`, `practical`, `tutorial`,
+    `other`; default `lecture`), optional `active_from`/`active_to`
+    (calendar dates inside the semester, inclusive), optional
+    `archived_at`, and timestamps. A subject is required: a class with
+    no subject cannot be labelled or counted for attendance. The
+    subject's name is the label, so no name is copied onto the slot, and
+    no `faculty` column is added while subjects have none (P10 deferred
+    subject metadata).
+-   **Effective range:** both dates null means the whole semester. A
+    timetable that changes mid-semester is an end date on the old slot
+    plus a new slot for the new pattern, never an edit of a past
+    occurrence. The range is validated against the semester dates, and
+    P12 refuses a semester without dates when a bounded range is
+    required.
+-   **Validation:** end strictly after start; no class may cross
+    midnight. Times travel as zero-padded `HH:MM` 24-hour strings and
+    are stored as `time`; a database `CHECK` repeats
+    `end_time > start_time`, as the project already does for dates
+    (D021--D023).
+-   **Overlap policy:** within one semester, two non-archived slots may
+    not overlap on the same weekday. P12 enforces this in the repository
+    inside a transaction that locks the semester row, so two concurrent
+    writes cannot both pass the check, and backs it with a partial
+    unique index on
+    `(semester_id, day_of_week, start_time, end_time) WHERE archived_at IS NULL`
+    for exact duplicates. Overlaps are rejected: a student cannot attend
+    two classes at once. An explicit "allow overlap" escape hatch is
+    deferred until the owner needs one, because it must be a deliberate,
+    visible choice rather than a default.
+-   **Rejected alternatives:** a PostgreSQL `EXCLUDE` range constraint
+    would prove mutual exclusion structurally, but it needs the
+    `btree_gist` extension, which is unverified on the intended managed
+    database; enabling an extension in production is its own decision.
+    A find-then-insert check without the per-semester lock would let a
+    race create a conflict.
+-   **Implication:** `active_from`/`active_to` belong in P12 because
+    without them a slot added in week 8 would generate classes for weeks
+    1--7 when P15 first runs. Removing a slot is governed by D035.
+
+## D032 --- An occurrence is a dated snapshot, filled idempotently from rules
+
+-   **Date:** 2026-11-06
+-   **Decision:** `class_occurrences` stores `id`, `semester_id`,
+    `user_id`, `subject_id`, nullable `source_slot_id` and
+    `source_exception_slot_id` (at most one set), `date`,
+    `start_time`/`end_time`, optional `room`, `class_type`, `status`
+    (`scheduled` or `cancelled`), and timestamps. Date, times, room,
+    class type, and subject id are copied from the rule when the row is
+    created, so a later slot edit cannot rewrite what was planned for
+    that day. The subject's name is not copied: `subject_id` is the
+    stable identity, a rename is a label change rather than a historical
+    fact, and the subject row cannot be deleted while occurrences
+    reference it (D035).
+-   **Status scope:** only `scheduled` and `cancelled` are stored.
+    MAIN_PLAN also lists `completed`, but whether a class was held is an
+    attendance fact (P17); storing it here would create a second source
+    of truth for the same thing. A class whose time has passed is not
+    silently "completed".
+-   **Idempotency:** a partial unique index on
+    `(source_slot_id, date) WHERE source_slot_id IS NOT NULL`, and a
+    unique index on `source_exception_slot_id WHERE source_exception_slot_id IS NOT NULL`
+    (a one-off class belongs to exactly one date), make a second
+    generation run insert nothing. Generation uses
+    `ON CONFLICT DO NOTHING` and never updates, deletes, or renumbers
+    existing rows, so re-running is always safe.
+-   **Generation scope (P15):** on demand, for an explicit semester and
+    date range clamped to the semester's start and end dates. There is
+    no background scheduler and no rolling-window daemon: a caller asks
+    for what it needs and gets the same rows back each time. A semester
+    without dates cannot generate. Holidays insert nothing; a special
+    day inserts from its own one-off classes (D033). Occurrences that
+    already exist on a date later marked a holiday are reconciled
+    explicitly to `cancelled` --- rows and any recorded attendance stay.
+-   **Manual occurrences:** `source_slot_id` is nullable so a later
+    milestone can add a one-off class by hand, but P15 only generates
+    from rules and adds no manual-add UI.
+-   **Reason:** P15's hard acceptance criterion is that repeated
+    generation does not duplicate classes, and P17/P20 require
+    attendance history to survive timetable edits. A snapshot plus a
+    nullable source is the smallest shape that satisfies both without a
+    versioned slot table.
+
+## D033 --- Date exceptions are one record per date, and a special day owns its classes
+
+-   **Date:** 2026-11-06
+-   **Decision:** `day_exceptions` stores `id`, `semester_id`, `user_id`,
+    `date`, `kind`, optional `reason` (trimmed, 1--200 characters), and
+    timestamps, with `UNIQUE (semester_id, date)`. `kind` has exactly two
+    values: `holiday` and `special_schedule`. `day_exception_slots`
+    stores `id`, `exception_id`, `semester_id`, `user_id`, `subject_id`,
+    `start_time`/`end_time`, optional `room`, `class_type`, and
+    timestamps --- the classes that happen on that one date. A special
+    day's classes therefore never enter `timetable_slots`, and marking a
+    holiday never edits a recurring row.
+-   **Semantics:** a `holiday` means no ordinary classes are generated
+    for that date, adds no class, and is not an absence (D004). A
+    `special_schedule` replaces that date's classes with its own list,
+    which may be empty (a day of cancelled classes). Dates are calendar
+    dates (D024) and must fall inside the semester range; the repository
+    validates that because a `CHECK` cannot read another table.
+-   **Narrowed kinds:** MAIN_PLAN lists `cancelled_classes` and `other`
+    as possible kinds. They are not adopted because a holiday with a
+    reason already expresses "no classes" and an `other` kind has no
+    defined behaviour. Adding an enum value later is additive;
+    introducing a state with no rule is not. This is a deliberate
+    resolution of an ambiguity in the plan, not an oversight.
+-   **Why one exception per date:** two records for one date would need a
+    precedence rule, and nothing in the product needs two. If that ever
+    changes, the unique constraint should be revisited deliberately
+    rather than worked around.
+-   **Reconciliation:** marking a date as a holiday after occurrences
+    exist does not delete them; P14 offers to cancel the affected future
+    occurrences explicitly, preserving attendance. Removing a special
+    day after its classes have occurrences needs the same explicit
+    choice, so one-off slots are referenced with `ON DELETE RESTRICT`
+    (D035).
+-   **Reason:** MAIN_PLAN requires a unique exception per semester/date
+    and a preview-then-save flow; separating the one-off classes from
+    the exception record keeps both editable without rewriting either.
+
+## D034 --- Timetable times are wall-clock, and "today" is decided by the client
+
+-   **Date:** 2026-11-06
+-   **Decision:** Slot and occurrence times are `time` without time zone
+    and travel as `HH:MM` strings. They are never combined with a date on
+    the server to form an instant, never converted to UTC, and never
+    parsed through a JavaScript `Date`. Calendar dates stay `date` values
+    read as strings, using the pool parser installed in D024. There is no
+    timezone column and no per-user timezone setting yet.
+-   **"Today":** any endpoint that needs today or the current class takes
+    an explicit date or range from the client; the server never infers a
+    day from its own clock or host timezone. A browser resolves today in
+    the student's local time, which is the only place the local calendar
+    is known. P16 and P27 must pass the date explicitly rather than
+    calling `new Date()` on the server.
+-   **Class length:** a class must end on the same calendar day
+    (`end_time > start_time`). An overnight class is out of scope;
+    supporting one needs a different representation and a new decision.
+    No daylight-saving arithmetic is needed because no instant exists:
+    09:00 is 09:00 on every date.
+-   **Limitation:** a student who travels across time zones sees the
+    times as entered, which is correct for a college timetable. If a
+    per-user timezone ever matters, it is a settings decision, not a
+    silent server-side conversion.
+-   **Reason:** D024 established that converting calendar dates through
+    `Date` shifts days on this machine (Asia/Calcutta). Timetable times
+    have the same failure mode with a smaller blast radius, and
+    attendance percentages and "next class" would inherit it.
+
+## D035 --- Timetable ownership is structural, and history is archived, not deleted
+
+-   **Date:** 2026-11-06
+-   **Decision:** Every timetable table carries `semester_id` and
+    `user_id` and uses the D028 composite pattern: `(semester_id,
+    user_id)` references the existing `semesters(id, user_id)` unique key
+    with `ON DELETE RESTRICT`. A subject reference uses `(subject_id,
+    semester_id, user_id)`, and a slot or special-day reference uses
+    `(id, semester_id, user_id)`, so a row cannot point at a subject,
+    slot, or special day of another semester or another owner even
+    through direct SQL. The P12 migration adds the unique constraints
+    those keys need --- `subjects(id, semester_id, user_id)`,
+    `timetable_slots(id, semester_id, user_id)`, and
+    `day_exceptions(id, semester_id, user_id)` --- as additive
+    constraints: they build indexes and rewrite no rows. Repositories
+    keep filtering every query by `user_id` and semester, and routes keep
+    reporting a foreign or missing row as 404 rather than forbidden.
+-   **Deletion policy:** a semester or subject with timetable rows cannot
+    be deleted (`RESTRICT`), and a slot referenced by an occurrence
+    cannot be deleted either. "Remove" is then `archived_at`, which
+    stops future generation and leaves the dated history intact. A slot
+    with no occurrences may be hard-deleted because nothing historical
+    depends on it, and a special day whose one-off classes have
+    occurrences follows the same rule. Attendance (P17) will reference
+    occurrences with the same guarantee.
+-   **Reason:** `AGENT_INSTRUCTIONS.md` section 4 forbids silently
+    rewriting historical occurrences or attendance, while P13 needs a
+    working remove action. Archiving is the smallest mechanism that
+    satisfies both and keeps a slot's identity available to the
+    occurrences that already name it.
+-   **Implication:** "delete" in a timetable context means archive once
+    history exists, and the UI must say which is happening. Nothing in
+    P12, P14, or P15 cascades a delete into occurrences. Export and
+    confirm for a whole semester remains the future policy in D023.

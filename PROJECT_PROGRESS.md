@@ -1,12 +1,13 @@
 # Project Progress --- The GPA Project
 
-**Last updated:** 2026-11-05\
-**Current milestone:** P10 --- Subject management UI\
+**Last updated:** 2026-11-06\
+**Current milestone:** P11 --- Timetable domain design (complete)\
 **Overall status:** Runnable foundation with a responsive shell, an
 owner-scoped semester and subject model, authenticated subject CRUD API
 endpoints, forward migrations, database-backed tests, and a
-semester-scoped subject management screen. Real Clerk/database
-verification remains outstanding.
+semester-scoped subject management screen. The timetable domain is
+designed and recorded (D030--D035); it has no code, schema, API, or UI
+yet. Real Clerk/database verification remains outstanding.
 
 ## Completed
 
@@ -48,6 +49,11 @@ verification remains outstanding.
 -   [x] P10: Subject list, detail, create, and edit flows scoped to the
     selected semester, with URL-based selection and keyed views that
     prevent stale subject data. Recorded as D029.
+-   [x] P11: Timetable domain designed as three separate layers ---
+    recurring weekly slots, date-scoped exceptions, and dated class
+    occurrences --- with validation, generation-idempotency, time, and
+    ownership rules recorded as D030--D035. No code, schema, migration,
+    or UI was added.
 
 ## Foundation as built
 
@@ -168,6 +174,42 @@ verification remains outstanding.
     semester switching, active/default/no-active selection, no
     semesters, request failure, and sign-in required.
 
+**Timetable domain design (P11)**
+
+-   Recorded in D030--D035. No table, endpoint, client, or screen exists
+    yet; P12 owns the first persistence change.
+-   Four shapes, each introduced by the milestone that needs it:
+    `timetable_slots` (P12), `day_exceptions` + `day_exception_slots`
+    (P14), and `class_occurrences` (P15). A slot holds a weekday and
+    wall-clock times and never a date; an occurrence holds a date and
+    its own copied times and never a weekly rule.
+-   Slot: required subject, ISO weekday 1--7, `time` start/end with no
+    overnight class, optional room, `lecture`/`practical`/`tutorial`/
+    `other`, and optional effective dates inside the semester. Overlaps
+    within a semester are rejected; the repository checks under a
+    semester lock and a partial unique index blocks exact duplicates.
+    A PostgreSQL `EXCLUDE` constraint is deferred because it needs the
+    unverified `btree_gist` extension.
+-   Occurrence: snapshot of date, times, room, class type, and subject
+    id, with only `scheduled`/`cancelled` stored; idempotent generation
+    through partial unique indexes over the source and date plus
+    `ON CONFLICT DO NOTHING`; on demand for an explicit range inside the
+    semester, never a background job, and never an update to existing
+    rows.
+-   Exception: one per semester date; only `holiday` or
+    `special_schedule`; a special day owns its one-off classes in
+    `day_exception_slots`, so the weekly table is never mutated. A
+    holiday adds no classes and is not an absence.
+-   Times are wall-clock and dates are calendar dates (D024); nothing is
+    converted to an instant, and the client passes "today" explicitly
+    (D034).
+-   Ownership repeats the D028 composite-key pattern; removal of a
+    referenced record is archiving, not cascading deletion (D035).
+-   Deliberately not decided or built here: endpoints, UI, attendance
+    states and formulas (P17/P19), manual one-off classes, task links,
+    alternating-week patterns, overnight classes, and per-user
+    timezones.
+
 **Dependencies added (P07, exact pins)** `drizzle-orm` 0.45.4, `pg`
 8.23.1; dev: `drizzle-kit` 0.31.11, `@types/pg` 8.23.1,
 `@electric-sql/pglite` 0.5.11.
@@ -235,6 +277,7 @@ TypeScript 7 through `@typescript/native`.
 | `pnpm check` (P09-B) | **Exit 0** --- format, lint, typecheck, 157 tests (133 API, 24 web), build. The 55 new API tests are 33 repository tests and 22 route tests, all against PGlite and the real Express app. |
 | Migration checks (P09-B) | `drizzle-kit check` reported **"Everything's fine"**; a second `db:generate` reported **"No schema changes, nothing to migrate"**. The full migration sequence applied to a fresh PGlite in both new test files; re-applying is a no-op. No PostgreSQL server is available. |
 | `pnpm check` (P10) | **Exit 0** --- format, lint, typecheck, 171 tests (133 API, 38 web), build. The 14 new web tests cover list, empty, create, client/server validation, detail, edit, failure states, and semester-switch isolation. |
+| `pnpm check` (P11) | **Exit 0** --- format, lint, typecheck, 171 tests (133 API, 38 web), build. This milestone changed documentation only, so the unchanged suite is the regression check. |
 
 **Could not run:** a real GitHub Actions run (workflow validated locally
 only), a migration through `pg` against a PostgreSQL server (none is
@@ -287,12 +330,13 @@ passing.
 
 ## Next action
 
-P10 is complete in code and tests: subjects can be listed, opened,
-created, and edited per semester, and switching semesters cannot retain
-the previous semester's subject view. The Phase 2 user-facing exit
-criteria are met at implementation level. Run `P11` (timetable domain
-design) next. Clerk and managed PostgreSQL still need real configuration
-before sign-in and server migrations can be verified.
+P11 is complete: the timetable domain is designed and recorded in
+D030--D035, and no timetable code exists yet. Run `P12` (timetable
+persistence) next, implementing recurring slots exactly against those
+decisions --- the table, the additive migration, weekday/time validation,
+the overlap rule, and tests. Do not begin P13 or P14. Clerk and managed
+PostgreSQL still need real configuration before sign-in and server
+migrations can be verified.
 
 ## Session log
 
@@ -372,4 +416,10 @@ before sign-in and server migrations can be verified.
                                       38 web / 171
                                       total tests;
                                       D029
+
+  2026-11-06        P11               Timetable domain  P12 timetable
+                                      design recorded;   persistence
+                                      no code or
+                                      migration;
+                                      D030--D035
   -----------------------------------------------------------------------
