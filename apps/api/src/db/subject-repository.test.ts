@@ -77,6 +77,7 @@ describe("subject migration", () => {
     expect(tables.rows.map((row) => row.table_name)).toEqual([
       "semesters",
       "subjects",
+      "timetable_slots",
       "users",
     ]);
   });
@@ -130,6 +131,7 @@ describe("subject migration", () => {
     );
 
     expect(indexes.rows.map((row) => row.indexname)).toEqual([
+      "subjects_id_semester_id_user_id_unique",
       "subjects_pkey",
       "subjects_semester_id_idx",
       "subjects_user_id_idx",

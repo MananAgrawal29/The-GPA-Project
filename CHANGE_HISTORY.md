@@ -522,3 +522,45 @@ new entries that reference the earlier one.
 -   **Follow-up:** Run P12 timetable persistence exactly against
     D030--D035, adding the recurring slot table and its migration. Do not
     begin P13 or P14.
+
+------------------------------------------------------------------------
+
+## 2026-11-06 --- P12: Recurring timetable slot persistence
+
+-   **Change:** Added recurring weekly timetable slots: shared validation
+    contracts, a forward migration, a server-side domain module, an
+    owner-scoped repository, and tests. No HTTP route or UI was added;
+    P13 owns the editor.
+-   **Implementation:** `timetable_slots` stores the owning semester and
+    user, a required subject, ISO weekday 1--7, wall-clock `time` start
+    and end, optional room, `lecture`/`practical`/`tutorial`/`other`
+    class type, optional active dates, and `archived_at`. The migration
+    adds the enum, the table, composite unique targets on `subjects` and
+    `timetable_slots`, two `RESTRICT` ownership foreign keys, four
+    `CHECK` constraints, two scan indexes, and the partial unique index
+    `timetable_slots_exact_duplicate`. Creates and updates lock the
+    semester row, validate the merged record, verify the subject belongs
+    to that semester and owner, reject overlapping live slots, and write.
+    A constraint rejection is mapped to the same typed errors.
+-   **Verification:** `pnpm check` exit 0 --- format, lint, typecheck,
+    **237 tests (199 API, 38 web)**, build. The 66 new API tests are 32
+    domain tests and 34 repository/migration tests. `drizzle-kit check`
+    reported "Everything's fine"; a second `db:generate` reported "No
+    schema changes, nothing to migrate"; both new test files apply the
+    complete migration sequence to a fresh PGlite, where re-applying is a
+    no-op.
+-   **Data/migration impact:** Additive. `0000` and `0001` are untouched;
+    one enum, one table, two composite unique constraints, two foreign
+    keys, four checks, and three indexes (two scan, one partial unique)
+    are added. No existing row is rewritten or deleted.
+-   **Known limitations:** Overlap ignores effective dates (D036), so a
+    same-time replacement needs the old slot removed first. PGlite is
+    single-connection, so the `FOR UPDATE` lock has never been contended
+    by two writes. There is no endpoint or editor yet; a subject that a
+    slot uses cannot be deleted (the database refuses it), and the
+    existing subject delete endpoint has no mapping for that rejection
+    until P15 decides the archive flow. Times remain wall-clock with no
+    per-user timezone.
+-   **Follow-up:** Run P13 timetable editor against these repository
+    functions, adding its authenticated routes and the semester-scoped
+    weekly UI. Do not begin P14 or P15.

@@ -15,8 +15,8 @@ binding requirements even where a prompt's text is terse.
 complete through P10 in code and tests: semesters and semester-scoped
 subjects have persisted models, authenticated APIs, and management
 screens. Real Clerk sign-in and server migration verification remain
-environment limitations. Phase 3 design is complete at P11 (D030--D035)
-and implementation starts with P12 timetable persistence. See
+environment limitations. Phase 3 design (P11) and recurring slot
+persistence (P12) are complete; the timetable editor starts at P13. See
 `PROJECT_PROGRESS.md` for the verified detail.
 
 ## Phase 0 --- Understand the repository (P00--P02)

@@ -6,13 +6,15 @@ import {
   index,
   pgEnum,
   pgTable,
+  smallint,
   text,
+  time,
   timestamp,
   unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { SemesterStatus } from "@gpa/shared";
+import type { ClassType, SemesterStatus } from "@gpa/shared";
 
 /**
  * Drizzle schema for The GPA Project.
@@ -160,6 +162,15 @@ export const subjects = pgTable(
     index("subjects_user_id_idx").on(table.userId),
     index("subjects_semester_id_idx").on(table.semesterId),
 
+    // Composite foreign-key target for timetable slots: a slot references
+    // `(subject_id, semester_id, user_id)`, so the database proves its
+    // subject belongs to the same semester and owner as the slot (D035).
+    unique("subjects_id_semester_id_user_id_unique").on(
+      table.id,
+      table.semesterId,
+      table.userId,
+    ),
+
     // Ownership integrity: the referenced pair must exist in semesters,
     // so `user_id` is the owner of `semester_id`, and the referenced user
     // therefore exists too (semesters.user_id already references users).
@@ -182,3 +193,121 @@ export const subjects = pgTable(
 );
 
 export type SubjectRow = typeof subjects.$inferSelect;
+
+export const classTypeEnum = pgEnum("class_type", [
+  "lecture",
+  "practical",
+  "tutorial",
+  "other",
+]);
+
+type SchemaClassType = (typeof classTypeEnum.enumValues)[number];
+
+// Repeated from `@gpa/shared` for the same drizzle-kit resolver reason as
+// the semester status enum above. A drift between the two becomes a type
+// error here instead of a runtime mismatch.
+export const classTypeParity: Equal<ClassType, SchemaClassType> = true;
+
+/**
+ * Recurring weekly timetable slots.
+ *
+ * A slot is a rule, not an event (D030): it says that a subject meets at a
+ * wall-clock time on a weekday, and carries no date of its own. Dated class
+ * occurrences are generated from these rules in P15 and never live here.
+ *
+ * `archived_at` stops a slot from generating future classes while keeping
+ * the row that existing occurrences point at (D035). P12 has no
+ * occurrences yet, so removal is still a hard delete when nothing refers
+ * to the row.
+ */
+export const timetableSlots = pgTable(
+  "timetable_slots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    semesterId: uuid("semester_id").notNull(),
+    userId: text("user_id").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+
+    // ISO weekday: Monday is 1 and Sunday is 7, matching `isodow`.
+    dayOfWeek: smallint("day_of_week").notNull(),
+
+    // Wall-clock times with no date and no time zone (D034). Both are
+    // compared as strings in `HH:MM` form before they reach SQL.
+    startTime: time("start_time").notNull(),
+    endTime: time("end_time").notNull(),
+
+    room: text("room"),
+    classType: classTypeEnum("class_type").notNull().default("lecture"),
+
+    // Optional effective range inside the semester. A timetable that
+    // changes mid-term uses an end date on the old slot plus a new slot,
+    // never an edit of a past occurrence.
+    activeFrom: date("active_from"),
+    activeTo: date("active_to"),
+
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("timetable_slots_semester_id_idx").on(table.semesterId),
+    index("timetable_slots_subject_id_idx").on(table.subjectId),
+
+    // Composite foreign-key target for P15's dated occurrences: it lets
+    // the database prove that an occurrence's source slot belongs to the
+    // occurrence's semester and owner (D035).
+    unique("timetable_slots_id_semester_id_user_id_unique").on(
+      table.id,
+      table.semesterId,
+      table.userId,
+    ),
+
+    // Ownership is structural: the slot's semester, and its subject within
+    // that semester, must both belong to the same owner.
+    foreignKey({
+      columns: [table.semesterId, table.userId],
+      foreignColumns: [semesters.id, semesters.userId],
+      name: "timetable_slots_semester_owner_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.subjectId, table.semesterId, table.userId],
+      foreignColumns: [subjects.id, subjects.semesterId, subjects.userId],
+      name: "timetable_slots_subject_owner_fk",
+    }).onDelete("restrict"),
+
+    // Repeat the shared rules so a slot cannot reach an invalid state
+    // through SQL, a script, or a future endpoint that skips zod.
+    check(
+      "timetable_slots_day_of_week_range",
+      sql`${table.dayOfWeek} between 1 and 7`,
+    ),
+    check(
+      "timetable_slots_time_order",
+      sql`${table.endTime} > ${table.startTime}`,
+    ),
+    check(
+      "timetable_slots_room_length",
+      sql`${table.room} is null or char_length(btrim(${table.room})) between 1 and 80`,
+    ),
+    check(
+      "timetable_slots_active_range_order",
+      sql`${table.activeFrom} is null or ${table.activeTo} is null or ${table.activeTo} >= ${table.activeFrom}`,
+    ),
+
+    // Backstop for the repository's overlap check: the same time on the
+    // same weekday cannot exist twice in one semester. Archived slots are
+    // excluded so a replaced rule can keep its history (D035).
+    uniqueIndex("timetable_slots_exact_duplicate")
+      .on(table.semesterId, table.dayOfWeek, table.startTime, table.endTime)
+      .where(sql`${table.archivedAt} is null`),
+  ],
+);
+
+export type TimetableSlotRow = typeof timetableSlots.$inferSelect;

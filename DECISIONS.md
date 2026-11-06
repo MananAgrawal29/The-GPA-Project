@@ -855,3 +855,54 @@ superseded and explain why.
     history exists, and the UI must say which is happening. Nothing in
     P12, P14, or P15 cascades a delete into occurrences. Export and
     confirm for a whole semester remains the future policy in D023.
+
+## D036 --- Slot writes validate under a semester lock, and overlap is a live-range rule
+
+-   **Date:** 2026-11-06
+-   **Decision:** P12 implements `timetable_slots` with the columns from
+    D031 plus the composite targets D035 names:
+    `subjects(id, semester_id, user_id)` and
+    `timetable_slots(id, semester_id, user_id)` are unique, and the slot
+    carries two composite foreign keys --- `(semester_id, user_id)` to
+    `semesters(id, user_id)` and `(subject_id, semester_id, user_id)` to
+    `subjects(id, semester_id, user_id)` --- both `ON DELETE RESTRICT`.
+    Every create and update opens a transaction, locks the owning
+    semester row with `SELECT ... FOR UPDATE`, validates the merged
+    record, checks overlaps, then writes; the lock order is always
+    semester then slot. Overlap means two live (non-archived) slots in
+    one semester on the same weekday whose half-open `[start, end)` ranges
+    intersect. The partial unique index
+    `timetable_slots_exact_duplicate` backs the same rule for identical
+    times, and a unique-constraint rejection maps to the same overlap
+    error.
+-   **Effective ranges and overlap:** overlap deliberately ignores
+    `active_from`/`active_to` and compares the weekly rule, which is the
+    literal D031 policy. Replacing a rule at the same weekday and time
+    therefore means removing or archiving the old slot first, even when
+    the effective ranges would not meet; making overlap range-aware would
+    be a new decision and a change to the index. Other weekdays, other
+    semesters, adjacent slots, and archived slots never conflict.
+-   **Serialization:** `HH:MM` is the contract format; PostgreSQL returns
+    a `time` value as `HH:MM:SS`, which is truncated to five characters on
+    read. No `Date` is involved and there is no timezone conversion
+    (D034).
+-   **Scope:** P12 exposes repository functions only. The editor and its
+    HTTP routes are P13; date exceptions are P14; occurrences and
+    archive-instead-of-delete are P15. Deletion in P12 is a hard delete
+    because no occurrence table exists yet, which D035 permits for
+    unreferenced slots.
+-   **Migration:** `0002_typical_pandemic.sql` is additive. The generated
+    SQL placed the new `subjects` unique constraint after the foreign key
+    that needs it, so the constraint was moved to the first statement of
+    the same migration; a fresh PGlite applies the whole sequence in both
+    new test files, and re-applying is a no-op.
+-   **Reason:** the repository check produces a field-level, explainable
+    error, the lock closes the check-then-insert race a plain read would
+    leave open, and the partial index protects direct SQL and future
+    callers.
+-   **Limitation:** PGlite is single-connection, so real write contention
+    has never been exercised; the lock's behavior under two live
+    connections remains unverified until a PostgreSQL server exists. A
+    subject that a slot uses cannot be deleted (the database refuses it),
+    but the existing subject delete endpoint has no mapping for that
+    rejection yet.

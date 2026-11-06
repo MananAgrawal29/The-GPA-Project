@@ -1,12 +1,12 @@
 # Project Progress --- The GPA Project
 
 **Last updated:** 2026-11-06\
-**Current milestone:** P11 --- Timetable domain design (complete)\
+**Current milestone:** P12 --- Recurring timetable slot persistence (complete)\
 **Overall status:** Runnable foundation with a responsive shell, an
 owner-scoped semester and subject model, authenticated subject CRUD API
-endpoints, forward migrations, database-backed tests, and a
-semester-scoped subject management screen. The timetable domain is
-designed and recorded (D030--D035); it has no code, schema, API, or UI
+endpoints, forward migrations, database-backed tests, a semester-scoped
+subject management screen, and persisted recurring timetable slots with
+validated ownership and overlap rules. Timetable slots have no API or UI
 yet. Real Clerk/database verification remains outstanding.
 
 ## Completed
@@ -54,6 +54,10 @@ yet. Real Clerk/database verification remains outstanding.
     occurrences --- with validation, generation-idempotency, time, and
     ownership rules recorded as D030--D035. No code, schema, migration,
     or UI was added.
+-   [x] P12: Recurring timetable slots persisted through an additive
+    migration, a shared contract, server-side validation, and an
+    owner-scoped repository whose writes lock the semester and reject
+    overlapping live slots. Recorded as D036; 66 new tests.
 
 ## Foundation as built
 
@@ -68,8 +72,8 @@ yet. Real Clerk/database verification remains outstanding.
     navigation groups, module routes, summaries, milestones, and status.
 -   `apps/api` --- Express 5 (ESM), env validation, `/health`, uniform
     error envelope, the Clerk session boundary, semester and subject
-    routes, the Drizzle schema, migrations, and both repositories. 133
-    tests.
+    routes, the Drizzle schema, migrations, and the semester, subject,
+    and timetable slot repositories. 199 tests.
 
 **API and sign-in boundary (P08)**
 
@@ -87,10 +91,11 @@ yet. Real Clerk/database verification remains outstanding.
     activate, with explicit loading, empty, validation, refusal,
     sign-in-required, and request-failure views (D027).
 -   `packages/shared` --- zod contracts (`healthResponseSchema`,
-    `apiErrorSchema`, semester and subject create/patch/record schemas),
-    the semester date and status rules, `APP_NAME`, `APP_TAGLINE`; built
-    to `dist` by a `prepare` script so consumers resolve types
-    immediately after install.
+    `apiErrorSchema`, semester and subject create/patch/record schemas,
+    timetable slot create/patch/record schemas), the semester date and
+    status rules, timetable wall-clock and semester-bound rules,
+    `APP_NAME`, `APP_TAGLINE`; built to `dist` by a `prepare` script so
+    consumers resolve types immediately after install.
 
 **Database (P07)**
 
@@ -210,6 +215,40 @@ yet. Real Clerk/database verification remains outstanding.
     alternating-week patterns, overnight classes, and per-user
     timezones.
 
+**Timetable slot persistence (P12)**
+
+-   `apps/api/drizzle/0002_typical_pandemic.sql` --- forward, additive
+    migration: creates the `class_type` enum and `timetable_slots`, adds
+    composite unique targets on `subjects` and `timetable_slots`, two
+    ownership foreign keys with `ON DELETE RESTRICT`, four `CHECK`
+    constraints, two scan indexes, and the partial unique index
+    `timetable_slots_exact_duplicate`. `0000` and `0001` are untouched.
+    The parent `subjects` constraint is the first statement because the
+    generated order placed it after the foreign key that needs it.
+-   `apps/api/src/db/schema.ts` --- the table and enum, with a class-type
+    parity check against `@gpa/shared`, the same pattern D021 uses for
+    semester status.
+-   `packages/shared/src/timetable.ts` --- slot fields, create/patch and
+    record schemas, `HH:MM` wall-clock validation, ISO weekday 1--7, and
+    the cross-field rules (end after start, active range order, active
+    range inside the semester).
+-   `apps/api/src/domain/timetable.ts` --- server-side parsing, the
+    read-merge-write helpers, and typed validation, ownership, and
+    overlap errors.
+-   `apps/api/src/db/timetable-slot-repository.ts` --- create, list, get,
+    update, and delete, every query scoped by owner and semester. Creates
+    and updates lock the owning semester with `FOR UPDATE` before
+    checking overlaps, and lock order is semester then slot.
+-   Overlap means two live slots on the same weekday with intersecting
+    half-open `[start, end)` ranges in one semester. Adjacent slots,
+    other weekdays, other semesters, and archived slots never conflict.
+-   Times cross the contract as `HH:MM`; PostgreSQL's `HH:MM:SS` is
+    truncated on read and never parsed into a `Date` (D034).
+-   No route or screen is exposed yet. P13 owns the editor and its HTTP
+    surface.
+-   Tests: 32 domain tests and 34 repository/migration tests, all against
+    PGlite and the committed migration.
+
 **Dependencies added (P07, exact pins)** `drizzle-orm` 0.45.4, `pg`
 8.23.1; dev: `drizzle-kit` 0.31.11, `@types/pg` 8.23.1,
 `@electric-sql/pglite` 0.5.11.
@@ -278,6 +317,7 @@ TypeScript 7 through `@typescript/native`.
 | Migration checks (P09-B) | `drizzle-kit check` reported **"Everything's fine"**; a second `db:generate` reported **"No schema changes, nothing to migrate"**. The full migration sequence applied to a fresh PGlite in both new test files; re-applying is a no-op. No PostgreSQL server is available. |
 | `pnpm check` (P10) | **Exit 0** --- format, lint, typecheck, 171 tests (133 API, 38 web), build. The 14 new web tests cover list, empty, create, client/server validation, detail, edit, failure states, and semester-switch isolation. |
 | `pnpm check` (P11) | **Exit 0** --- format, lint, typecheck, 171 tests (133 API, 38 web), build. This milestone changed documentation only, so the unchanged suite is the regression check. |
+| `pnpm check` (P12) | **Exit 0** --- format, lint, typecheck, 237 tests (199 API, 38 web), build. The 66 new API tests are 32 domain tests and 34 repository/migration tests. `drizzle-kit check` reported "Everything's fine", and a second `db:generate` reported "No schema changes, nothing to migrate". |
 
 **Could not run:** a real GitHub Actions run (workflow validated locally
 only), a migration through `pg` against a PostgreSQL server (none is
@@ -311,8 +351,9 @@ passing.
     costs are unconfirmed.
 -   Institution grading rules unconfirmed; Phase 8 remains blocked
     (D008).
--   Calendar-date handling is recorded (D024), but timetable wall-clock
-    times (P12) and the excused-attendance policy (P19) remain open.
+-   Calendar-date handling (D024) and timetable wall-clock times (D034)
+    are recorded and implemented; the excused-attendance policy (P19)
+    remains open.
 -   No PostgreSQL server exists in this workspace, so the migrations
     have only been applied to PGlite, and the managed-provider choice is
     still unconfirmed. `DATABASE_URL` stays optional at boot because no
@@ -330,13 +371,12 @@ passing.
 
 ## Next action
 
-P11 is complete: the timetable domain is designed and recorded in
-D030--D035, and no timetable code exists yet. Run `P12` (timetable
-persistence) next, implementing recurring slots exactly against those
-decisions --- the table, the additive migration, weekday/time validation,
-the overlap rule, and tests. Do not begin P13 or P14. Clerk and managed
-PostgreSQL still need real configuration before sign-in and server
-migrations can be verified.
+P12 is complete: recurring slots are persisted, validated, and tested,
+but they have no HTTP surface or editor yet. Run `P13` (timetable editor)
+next: add authenticated, semester-scoped routes over the P12 repository
+and the weekly add/edit/remove/review UI. Do not begin P14 or P15. Clerk
+and managed PostgreSQL still need real configuration before sign-in and
+server migrations can be verified.
 
 ## Session log
 
@@ -422,4 +462,10 @@ migrations can be verified.
                                       no code or
                                       migration;
                                       D030--D035
+
+  2026-11-06        P12               Recurring slot    P13 timetable
+                                      table, migration,  editor
+                                      repository, and
+                                      66 tests;
+                                      D036
   -----------------------------------------------------------------------

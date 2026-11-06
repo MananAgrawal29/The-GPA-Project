@@ -42,7 +42,9 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await client.exec("truncate table semesters, users cascade");
+  await client.exec(
+    "truncate table timetable_slots, subjects, semesters, users cascade",
+  );
 });
 
 async function createUser(): Promise<string> {
@@ -68,6 +70,7 @@ describe("semester migration", () => {
     expect(tables.rows.map((row) => row.table_name)).toEqual([
       "semesters",
       "subjects",
+      "timetable_slots",
       "users",
     ]);
   });

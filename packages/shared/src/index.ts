@@ -29,6 +29,28 @@ export type {
   SubjectPatch,
 } from "./semester.js";
 
+export {
+  CLASS_TYPES,
+  classTypeSchema,
+  createTimetableSlotInputSchema,
+  timetableSlotFieldsSchema,
+  timetableSlotIdSchema,
+  timetableSlotInvariantIssues,
+  timetableSlotPatchSchema,
+  timetableSlotSchema,
+  timetableSlotSemesterIssues,
+} from "./timetable.js";
+
+export type {
+  ClassType,
+  SemesterDateWindow,
+  TimetableSlot,
+  TimetableSlotCreateInput,
+  TimetableSlotFields,
+  TimetableSlotInvariantIssue,
+  TimetableSlotPatch,
+} from "./timetable.js";
+
 /** Product identity shared by every workspace package. */
 export const APP_NAME = "The GPA Project";
 
