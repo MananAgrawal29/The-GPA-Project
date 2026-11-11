@@ -1,8 +1,8 @@
 # Project Progress --- The GPA Project
 
 **Last updated:** 2026-11-11\
-**Current milestone:** P14 --- Calendar date exceptions (complete, audited, and
-verified; uncommitted)\
+**Current milestone:** P15 --- Dated class occurrences (implemented; uncommitted)\
+
 **Overall status:** Runnable foundation with a responsive shell, an
 owner-scoped semester and subject model, authenticated subject,
 timetable slot, and day-exception CRUD API endpoints, forward
@@ -78,6 +78,13 @@ regenerated snapshot, so the next migration can be generated.
     repositories, authenticated nested routes, shared contracts, a
     forward migration, and a calendar screen for creating, editing, and
     deleting holidays and special-schedule slots. Implements D033 and
+
+-   [x] P15: Dated class occurrences generated on demand from recurring
+    slots and P14 special schedules, with idempotent conflict-safe
+    insertion, semester/range clamping, active-date boundaries,
+    holiday suppression, snapshot preservation, and authenticated
+    generate/list/get routes. Adds migration 0004 and shared contracts;
+    13 repository tests and 5 route tests.
     D034; the special-schedule to holiday change is refused with 409
     while slots exist, weekdays come from ISO date components, and
     request bodies are validated with the shared Zod contracts. 391

@@ -825,3 +825,21 @@ new entries that reference the earlier one.
     unique target, which P15 needs before referencing a one-off slot.
 -   **Follow-up:** Commit P14 with explicit paths, then begin P15. Do not
     begin P15 in the same change.
+
+- **P15 --- Dated class occurrences (2026-11-11):** Added `class_occurrences`
+  with snapshot fields (date, subject, start/end times, room, class type),
+  nullable source references for recurring slots and one-off exception slots,
+  `scheduled`/`cancelled` status, composite ownership FKs, and partial
+  unique indexes for idempotent generation. Added the prerequisite
+  `(id, semester_id, user_id)` unique target on `day_exception_slots`.
+  Migration `0004_strong_vindicator.sql` generated and manually ordered so
+  the unique target precedes the new FKs. Added shared Zod contracts and
+  domain validation. Generation locks the semester, clamps the requested
+  range to semester dates, respects slot `active_from`/`active_to`,
+  suppresses holidays, generates special-schedule slots for special days,
+  and inserts with `ON CONFLICT DO NOTHING`. Timetable slot deletion now
+  archives a slot referenced by occurrences; day-exception slot deletion
+  throws a conflict. Added authenticated generate/list/get routes.
+  Added 13 repository tests and 5 route tests. `pnpm check` exit 0 with
+  339 API tests (16 files) and 70 web tests; `drizzle-kit check` clean;
+  `git diff --check` clean.

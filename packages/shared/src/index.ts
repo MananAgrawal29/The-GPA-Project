@@ -75,6 +75,21 @@ export {
   type CreateDayExceptionSlotInput,
 } from "./day-exception.js";
 
+export {
+  CLASS_OCCURRENCE_STATUSES,
+  classOccurrenceStatusSchema,
+  classOccurrenceFieldsSchema,
+  classOccurrenceIdSchema,
+  classOccurrenceSchema,
+  classOccurrenceRangeSchema,
+  generateClassOccurrencesInputSchema,
+  type ClassOccurrenceStatus,
+  type ClassOccurrenceFields,
+  type ClassOccurrence,
+  type ClassOccurrenceRange,
+  type GenerateClassOccurrencesInput,
+} from "./class-occurrence.js";
+
 /** Product identity shared by every workspace package. */
 export const APP_NAME = "The GPA Project";
 

@@ -14,7 +14,11 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { ClassType, SemesterStatus } from "@gpa/shared";
+import type {
+  ClassOccurrenceStatus,
+  ClassType,
+  SemesterStatus,
+} from "@gpa/shared";
 
 /**
  * Drizzle schema for The GPA Project.
@@ -474,8 +478,151 @@ export const dayExceptionSlots = pgTable(
     // on parent day_exception row, following P12's concurrency-control pattern.
     // No database constraint: P12's partial unique index on exact duplicate times,
     // P14 will enforce within-exception overlap in application layer.
+
+    // Composite foreign-key target for P15's dated occurrences: it lets the
+    // database prove that an occurrence's source exception slot belongs to the
+    // occurrence's semester and owner (D035).
+    unique("day_exception_slots_id_semester_id_user_id_unique").on(
+      table.id,
+      table.semesterId,
+      table.userId,
+    ),
   ],
 );
+
+/**
+ * P15 --- Dated class occurrences
+ *
+ * An occurrence is one dated, planned class generated from a recurring slot
+ * or a special-schedule exception slot. Date, times, room, class type, and
+ * subject are copied when the row is created, so later rule edits cannot
+ * rewrite planned history (D030, D032).
+ */
+export const classOccurrenceStatusEnum = pgEnum("class_occurrence_status", [
+  "scheduled",
+  "cancelled",
+]);
+
+type SchemaClassOccurrenceStatus =
+  (typeof classOccurrenceStatusEnum.enumValues)[number];
+
+export const classOccurrenceStatusParity: Equal<
+  ClassOccurrenceStatus,
+  SchemaClassOccurrenceStatus
+> = true;
+
+export const classOccurrences = pgTable(
+  "class_occurrences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    semesterId: uuid("semester_id").notNull(),
+    userId: text("user_id").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+
+    // At most one source may be set. A manual one-off occurrence has
+    // neither (D032); generated rows carry exactly one.
+    sourceSlotId: uuid("source_slot_id"),
+    sourceExceptionSlotId: uuid("source_exception_slot_id"),
+
+    date: date("date").notNull(),
+
+    // Wall-clock times with no date and no time zone (D034).
+    startTime: time("start_time").notNull(),
+    endTime: time("end_time").notNull(),
+
+    room: text("room"),
+    classType: classTypeEnum("class_type").notNull().default("lecture"),
+    status: classOccurrenceStatusEnum("status").notNull().default("scheduled"),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("class_occurrences_semester_id_idx").on(table.semesterId),
+    index("class_occurrences_subject_id_idx").on(table.subjectId),
+    index("class_occurrences_date_idx").on(table.date),
+
+    // Composite foreign-key target for P17 attendance: it lets the
+    // database prove that an attendance row's occurrence belongs to its
+    // semester and owner (D035).
+    unique("class_occurrences_id_semester_id_user_id_unique").on(
+      table.id,
+      table.semesterId,
+      table.userId,
+    ),
+
+    // Ownership is structural: the occurrence's semester must belong to
+    // the same owner.
+    foreignKey({
+      columns: [table.semesterId, table.userId],
+      foreignColumns: [semesters.id, semesters.userId],
+      name: "class_occurrences_semester_owner_fk",
+    }).onDelete("restrict"),
+
+    // Subject belongs to the same semester and owner.
+    foreignKey({
+      columns: [table.subjectId, table.semesterId, table.userId],
+      foreignColumns: [subjects.id, subjects.semesterId, subjects.userId],
+      name: "class_occurrences_subject_owner_fk",
+    }).onDelete("restrict"),
+
+    // A generated recurring occurrence points at its source slot, which
+    // must belong to the same semester and owner. The foreign key is
+    // nullable because manual occurrences have no source (D032).
+    foreignKey({
+      columns: [table.sourceSlotId, table.semesterId, table.userId],
+      foreignColumns: [
+        timetableSlots.id,
+        timetableSlots.semesterId,
+        timetableSlots.userId,
+      ],
+      name: "class_occurrences_source_slot_owner_fk",
+    }).onDelete("restrict"),
+
+    // A generated special-schedule occurrence points at its source
+    // exception slot, which must belong to the same semester and owner.
+    foreignKey({
+      columns: [table.sourceExceptionSlotId, table.semesterId, table.userId],
+      foreignColumns: [
+        dayExceptionSlots.id,
+        dayExceptionSlots.semesterId,
+        dayExceptionSlots.userId,
+      ],
+      name: "class_occurrences_source_exception_slot_owner_fk",
+    }).onDelete("restrict"),
+
+    check(
+      "class_occurrences_time_order",
+      sql`${table.endTime} > ${table.startTime}`,
+    ),
+    check(
+      "class_occurrences_room_length",
+      sql`${table.room} is null or char_length(btrim(${table.room})) between 1 and 80`,
+    ),
+    check(
+      "class_occurrences_source_exclusivity",
+      sql`${table.sourceSlotId} is null or ${table.sourceExceptionSlotId} is null`,
+    ),
+
+    // Idempotency: a recurring source slot generates at most one
+    // occurrence per date, and a one-off exception slot generates at
+    // most one occurrence ever (it belongs to exactly one date).
+    uniqueIndex("class_occurrences_source_slot_date_unique")
+      .on(table.sourceSlotId, table.date)
+      .where(sql`${table.sourceSlotId} is not null`),
+    uniqueIndex("class_occurrences_source_exception_slot_unique")
+      .on(table.sourceExceptionSlotId)
+      .where(sql`${table.sourceExceptionSlotId} is not null`),
+  ],
+);
+
+export type ClassOccurrenceRow = typeof classOccurrences.$inferSelect;
 
 // Type exports
 export type DayExceptionKind = SchemaDayExceptionKind;

@@ -131,6 +131,7 @@ describe("timetable slot migration", () => {
     );
 
     expect(tables.rows.map((row) => row.table_name)).toEqual([
+      "class_occurrences",
       "day_exception_slots",
       "day_exceptions",
       "semesters",

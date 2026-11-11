@@ -3,6 +3,7 @@ import { semesterIdSchema } from "@gpa/shared";
 import type { Database } from "./client.js";
 import { FOREIGN_KEY_VIOLATION, isConstraintViolation } from "./errors.js";
 import {
+  DayExceptionSlotConflictError,
   DayExceptionSlotHolidayConflictError,
   DayExceptionSlotOverlapError,
   DayExceptionSlotOwnershipError,
@@ -10,6 +11,7 @@ import {
   parseCreateDayExceptionSlotInput,
 } from "../domain/day-exception-repository.js";
 import {
+  classOccurrences,
   dayExceptions,
   dayExceptionSlots,
   subjects,
@@ -483,6 +485,17 @@ export async function deleteDayExceptionSlot(
     return false;
   }
 
+  // A slot that dated history points at cannot be hard-deleted (D035).
+  const [referenced] = await db
+    .select({ id: classOccurrences.id })
+    .from(classOccurrences)
+    .where(eq(classOccurrences.sourceExceptionSlotId, slotId))
+    .limit(1);
+
+  if (referenced !== undefined) {
+    throw new DayExceptionSlotConflictError(slotId);
+  }
+
   const deleted = await db
     .delete(dayExceptionSlots)
     .where(
@@ -500,6 +513,7 @@ export async function deleteDayExceptionSlot(
 
 // Re-export types and validation from domain
 export {
+  DayExceptionSlotConflictError,
   DayExceptionSlotHolidayConflictError,
   DayExceptionSlotOverlapError,
   DayExceptionSlotOwnershipError,

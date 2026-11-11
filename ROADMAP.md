@@ -65,7 +65,7 @@ later inspect it without data mixing.
 -   P12 Timetable persistence
 -   P13 Timetable editor
 -   P14 Calendar date exceptions
--   P15 Dated class occurrences
+-   P15 Dated class occurrences (complete)
 -   P16 Timetable calendar views
 
 **Preserved requirements carried from the earlier roadmap draft:**

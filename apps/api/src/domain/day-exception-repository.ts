@@ -94,6 +94,22 @@ export class DayExceptionConflictError extends Error {
 }
 
 /**
+ * A special-schedule slot that dated history points at cannot be deleted.
+ *
+ * The slot stays in place so existing occurrences keep their source
+ * reference; the exception and its slots are reconciled explicitly (D035).
+ */
+export class DayExceptionSlotConflictError extends Error {
+  readonly slotId: string;
+
+  constructor(slotId: string) {
+    super("Cannot delete a slot that dated class occurrences reference.");
+    this.name = "DayExceptionSlotConflictError";
+    this.slotId = slotId;
+  }
+}
+
+/**
  * A special schedule that still owns class slots cannot become a holiday.
  *
  * A holiday is a class-free day, so the two states would contradict each

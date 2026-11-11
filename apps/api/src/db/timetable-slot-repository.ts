@@ -23,6 +23,7 @@ import {
   parseTimetableSlotPatch,
 } from "../domain/timetable.js";
 import {
+  classOccurrences,
   semesters,
   subjects,
   timetableSlots,
@@ -402,6 +403,30 @@ export async function deleteTimetableSlot(
 ): Promise<boolean> {
   if (!canNameTimetableSlot(semesterId, slotId)) {
     return false;
+  }
+
+  // A slot that dated history points at cannot be hard-deleted. Archive it
+  // instead so existing occurrences keep their source reference (D035).
+  const [referenced] = await db
+    .select({ id: classOccurrences.id })
+    .from(classOccurrences)
+    .where(eq(classOccurrences.sourceSlotId, slotId))
+    .limit(1);
+
+  if (referenced !== undefined) {
+    const archived = await db
+      .update(timetableSlots)
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(timetableSlots.id, slotId),
+          eq(timetableSlots.semesterId, semesterId),
+          eq(timetableSlots.userId, userId),
+        ),
+      )
+      .returning({ id: timetableSlots.id });
+
+    return archived.length > 0;
   }
 
   const deleted = await db
