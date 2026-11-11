@@ -1,27 +1,34 @@
 {
-  "version": "7",
   "dialect": "postgresql",
+  "version": "7",
   "entries": [
     {
+      "breakpoints": true,
       "idx": 0,
-      "version": "7",
-      "when": 1792767536891,
       "tag": "0000_semester_model",
-      "breakpoints": true
+      "version": "7",
+      "when": 1792767536891
     },
     {
+      "breakpoints": true,
       "idx": 1,
-      "version": "7",
-      "when": 1793895556684,
       "tag": "0001_condemned_gertrude_yorkes",
-      "breakpoints": true
+      "version": "7",
+      "when": 1793895556684
     },
     {
+      "breakpoints": true,
       "idx": 2,
-      "version": "7",
-      "when": 1793952100416,
       "tag": "0002_typical_pandemic",
-      "breakpoints": true
+      "version": "7",
+      "when": 1793952100416
+    },
+    {
+      "breakpoints": true,
+      "idx": 3,
+      "tag": "0003_calendar_date_exceptions",
+      "version": "7",
+      "when": 1796952100416
     }
   ]
 }

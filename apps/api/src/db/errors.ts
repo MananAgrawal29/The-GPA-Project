@@ -4,6 +4,9 @@ export const UNIQUE_VIOLATION = "23505";
 /** PostgreSQL SQLSTATE for a foreign-key violation. */
 export const FOREIGN_KEY_VIOLATION = "23503";
 
+/** PostgreSQL SQLSTATE for a restrict violation (ON DELETE RESTRICT). */
+export const RESTRICT_VIOLATION = "23001";
+
 interface PostgresErrorFields {
   readonly code?: unknown;
   readonly constraint?: unknown;

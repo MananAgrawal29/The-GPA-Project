@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router";
 import AppShell from "./components/AppShell";
 import { plannedModules } from "./navigation";
 import AcademicsPage from "./pages/AcademicsPage";
+import CalendarPage from "./pages/CalendarPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PlannedModulePage from "./pages/PlannedModulePage";
 import SubjectsPage from "./pages/SubjectsPage";
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/academics" element={<AcademicsPage />} />
         <Route path="/academics/subjects" element={<SubjectsPage />} />
         <Route path="/timetable" element={<TimetablePage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route
           path="/academics/subjects/:subjectId"
           element={<SubjectsPage />}

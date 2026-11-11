@@ -51,6 +51,30 @@ export type {
   TimetableSlotPatch,
 } from "./timetable.js";
 
+export {
+  dayExceptionKindSchema,
+  dayExceptionFieldsSchema,
+  dayExceptionPatchSchema,
+  dayExceptionSchema,
+  createDayExceptionInputSchema,
+  dayExceptionIdSchema,
+  DAY_EXCEPTION_KINDS,
+  type DayExceptionKind,
+  type DayException,
+  type DayExceptionFields,
+  type CreateDayExceptionInput,
+  type DayExceptionPatch,
+  dayExceptionSlotFieldsSchema,
+  dayExceptionSlotSchema,
+  dayExceptionSlotPatchSchema,
+  dayExceptionSlotIdSchema,
+  createDayExceptionSlotInputSchema,
+  type DayExceptionSlotFields,
+  type DayExceptionSlot,
+  type DayExceptionSlotPatch,
+  type CreateDayExceptionSlotInput,
+} from "./day-exception.js";
+
 /** Product identity shared by every workspace package. */
 export const APP_NAME = "The GPA Project";
 

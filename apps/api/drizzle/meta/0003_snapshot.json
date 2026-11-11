@@ -1,0 +1,795 @@
+{
+  "id": "6e5b6881-e0fa-4e93-a37c-1dec8973f241",
+  "prevId": "1fbe519e-8f88-46da-be95-d0b5bffa3840",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.day_exception_slots": {
+      "name": "day_exception_slots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "exception_id": {
+          "name": "exception_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "semester_id": {
+          "name": "semester_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_time": {
+          "name": "start_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_time": {
+          "name": "end_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "room": {
+          "name": "room",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "class_type": {
+          "name": "class_type",
+          "type": "class_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'lecture'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "day_exception_slots_exception_id_idx": {
+          "name": "day_exception_slots_exception_id_idx",
+          "columns": [
+            {
+              "expression": "exception_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "day_exception_slots_semester_id_idx": {
+          "name": "day_exception_slots_semester_id_idx",
+          "columns": [
+            {
+              "expression": "semester_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "day_exception_slots_subject_id_idx": {
+          "name": "day_exception_slots_subject_id_idx",
+          "columns": [
+            {
+              "expression": "subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "day_exception_slots_exception_owner_fk": {
+          "name": "day_exception_slots_exception_owner_fk",
+          "tableFrom": "day_exception_slots",
+          "tableTo": "day_exceptions",
+          "columnsFrom": ["exception_id", "semester_id", "user_id"],
+          "columnsTo": ["id", "semester_id", "user_id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "day_exception_slots_subject_owner_fk": {
+          "name": "day_exception_slots_subject_owner_fk",
+          "tableFrom": "day_exception_slots",
+          "tableTo": "subjects",
+          "columnsFrom": ["subject_id", "semester_id", "user_id"],
+          "columnsTo": ["id", "semester_id", "user_id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "day_exception_slots_semester_owner_fk": {
+          "name": "day_exception_slots_semester_owner_fk",
+          "tableFrom": "day_exception_slots",
+          "tableTo": "semesters",
+          "columnsFrom": ["semester_id", "user_id"],
+          "columnsTo": ["id", "user_id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "day_exception_slots_time_order": {
+          "name": "day_exception_slots_time_order",
+          "value": "\"day_exception_slots\".\"end_time\" > \"day_exception_slots\".\"start_time\""
+        },
+        "day_exception_slots_room_length": {
+          "name": "day_exception_slots_room_length",
+          "value": "\"day_exception_slots\".\"room\" is null or char_length(btrim(\"day_exception_slots\".\"room\")) between 1 and 80"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.day_exceptions": {
+      "name": "day_exceptions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "semester_id": {
+          "name": "semester_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "day_exception_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "day_exceptions_semester_id_idx": {
+          "name": "day_exceptions_semester_id_idx",
+          "columns": [
+            {
+              "expression": "semester_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "day_exceptions_user_id_idx": {
+          "name": "day_exceptions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "day_exceptions_semester_owner_fk": {
+          "name": "day_exceptions_semester_owner_fk",
+          "tableFrom": "day_exceptions",
+          "tableTo": "semesters",
+          "columnsFrom": ["semester_id", "user_id"],
+          "columnsTo": ["id", "user_id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "day_exceptions_semester_date_unique": {
+          "name": "day_exceptions_semester_date_unique",
+          "nullsNotDistinct": false,
+          "columns": ["semester_id", "date"]
+        },
+        "day_exceptions_id_semester_id_user_id_unique": {
+          "name": "day_exceptions_id_semester_id_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["id", "semester_id", "user_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.semesters": {
+      "name": "semesters",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "academic_year": {
+          "name": "academic_year",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "end_date": {
+          "name": "end_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "semester_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'setup'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "semesters_user_id_idx": {
+          "name": "semesters_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "semesters_one_active_per_user": {
+          "name": "semesters_one_active_per_user",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"semesters\".\"status\" = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "semesters_user_id_users_id_fk": {
+          "name": "semesters_user_id_users_id_fk",
+          "tableFrom": "semesters",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "semesters_id_user_id_unique": {
+          "name": "semesters_id_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["id", "user_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "semesters_name_length": {
+          "name": "semesters_name_length",
+          "value": "char_length(btrim(\"semesters\".\"name\")) between 1 and 80"
+        },
+        "semesters_academic_year_length": {
+          "name": "semesters_academic_year_length",
+          "value": "char_length(btrim(\"semesters\".\"academic_year\")) between 1 and 20"
+        },
+        "semesters_date_order": {
+          "name": "semesters_date_order",
+          "value": "\"semesters\".\"start_date\" is null or \"semesters\".\"end_date\" is null or \"semesters\".\"end_date\" >= \"semesters\".\"start_date\""
+        },
+        "semesters_active_has_dates": {
+          "name": "semesters_active_has_dates",
+          "value": "\"semesters\".\"status\" <> 'active' or (\"semesters\".\"start_date\" is not null and \"semesters\".\"end_date\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.subjects": {
+      "name": "subjects",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "semester_id": {
+          "name": "semester_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "subjects_user_id_idx": {
+          "name": "subjects_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "subjects_semester_id_idx": {
+          "name": "subjects_semester_id_idx",
+          "columns": [
+            {
+              "expression": "semester_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "subjects_semester_owner_fk": {
+          "name": "subjects_semester_owner_fk",
+          "tableFrom": "subjects",
+          "tableTo": "semesters",
+          "columnsFrom": ["semester_id", "user_id"],
+          "columnsTo": ["id", "user_id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "subjects_id_semester_id_user_id_unique": {
+          "name": "subjects_id_semester_id_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["id", "semester_id", "user_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "subjects_name_length": {
+          "name": "subjects_name_length",
+          "value": "char_length(btrim(\"subjects\".\"name\")) between 1 and 80"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.timetable_slots": {
+      "name": "timetable_slots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "semester_id": {
+          "name": "semester_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day_of_week": {
+          "name": "day_of_week",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_time": {
+          "name": "start_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_time": {
+          "name": "end_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "room": {
+          "name": "room",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "class_type": {
+          "name": "class_type",
+          "type": "class_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'lecture'"
+        },
+        "active_from": {
+          "name": "active_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active_to": {
+          "name": "active_to",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "timetable_slots_semester_id_idx": {
+          "name": "timetable_slots_semester_id_idx",
+          "columns": [
+            {
+              "expression": "semester_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "timetable_slots_subject_id_idx": {
+          "name": "timetable_slots_subject_id_idx",
+          "columns": [
+            {
+              "expression": "subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "timetable_slots_exact_duplicate": {
+          "name": "timetable_slots_exact_duplicate",
+          "columns": [
+            {
+              "expression": "semester_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "day_of_week",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_time",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "end_time",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"timetable_slots\".\"archived_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "timetable_slots_semester_owner_fk": {
+          "name": "timetable_slots_semester_owner_fk",
+          "tableFrom": "timetable_slots",
+          "tableTo": "semesters",
+          "columnsFrom": ["semester_id", "user_id"],
+          "columnsTo": ["id", "user_id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "timetable_slots_subject_owner_fk": {
+          "name": "timetable_slots_subject_owner_fk",
+          "tableFrom": "timetable_slots",
+          "tableTo": "subjects",
+          "columnsFrom": ["subject_id", "semester_id", "user_id"],
+          "columnsTo": ["id", "semester_id", "user_id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "timetable_slots_id_semester_id_user_id_unique": {
+          "name": "timetable_slots_id_semester_id_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["id", "semester_id", "user_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "timetable_slots_day_of_week_range": {
+          "name": "timetable_slots_day_of_week_range",
+          "value": "\"timetable_slots\".\"day_of_week\" between 1 and 7"
+        },
+        "timetable_slots_time_order": {
+          "name": "timetable_slots_time_order",
+          "value": "\"timetable_slots\".\"end_time\" > \"timetable_slots\".\"start_time\""
+        },
+        "timetable_slots_room_length": {
+          "name": "timetable_slots_room_length",
+          "value": "\"timetable_slots\".\"room\" is null or char_length(btrim(\"timetable_slots\".\"room\")) between 1 and 80"
+        },
+        "timetable_slots_active_range_order": {
+          "name": "timetable_slots_active_range_order",
+          "value": "\"timetable_slots\".\"active_from\" is null or \"timetable_slots\".\"active_to\" is null or \"timetable_slots\".\"active_to\" >= \"timetable_slots\".\"active_from\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.class_type": {
+      "name": "class_type",
+      "schema": "public",
+      "values": ["lecture", "practical", "tutorial", "other"]
+    },
+    "public.day_exception_kind": {
+      "name": "day_exception_kind",
+      "schema": "public",
+      "values": ["holiday", "special_schedule"]
+    },
+    "public.semester_status": {
+      "name": "semester_status",
+      "schema": "public",
+      "values": ["setup", "active", "completed", "archived"]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -124,6 +124,7 @@ const today: NavigationItem = { path: "/", label: "Today" };
 export const builtModules: readonly NavigationItem[] = [
   { path: "/academics", label: "Academics" },
   { path: "/timetable", label: "Timetable" },
+  { path: "/calendar", label: "Calendar" },
 ];
 
 export const navigationGroups: readonly NavigationGroup[] = [

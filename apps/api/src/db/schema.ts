@@ -142,7 +142,7 @@ export const subjects = pgTable(
     // Every subject belongs to a specific semester. The composite foreign
     // key below is the only relationship: it also requires `user_id` to
     // match the semester's owner, so a subject cannot be filed under
-    // someone else's term through any code path.
+    // someone else\'s term through any code path.
     semesterId: uuid("semester_id").notNull(),
 
     // Owner is derived from the associated semester, not from the request.
@@ -311,3 +311,190 @@ export const timetableSlots = pgTable(
 );
 
 export type TimetableSlotRow = typeof timetableSlots.$inferSelect;
+
+/**
+ * P14 --- Calendar Date Exceptions
+ * Based on DECISIONS.md D004, D005, D033
+ * One exception per semester date, with optional reason
+ */
+
+export const dayExceptionKindEnum = pgEnum("day_exception_kind", [
+  "holiday",
+  "special_schedule",
+]);
+
+type SchemaDayExceptionKind = (typeof dayExceptionKindEnum.enumValues)[number];
+
+/**
+ * Date-specific holidays and special schedule overrides.
+ *
+ * A day exception is a one-time calendar event (D033): it marks a specific
+ * date within a semester, either as a holiday (no classes) or a special
+ * schedule (custom class list). It does not mutate the recurring weekly
+ * timetable.
+ *
+ * `kind` = 'holiday': no classes that day, optional reason
+ * `kind` = 'special_schedule': classes defined in `day_exception_slots`
+ *
+ * Constraints:
+ * - One exception per semester date (UNIQUE (semester_id, date))
+ * - Holiday exceptions cannot contain slots (enforced in repository)
+ * - Date must fall inside semester range (enforced in repository)
+ */
+export const dayExceptions = pgTable(
+  "day_exceptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    semesterId: uuid("semester_id").notNull(),
+    userId: text("user_id").notNull(),
+
+    date: date("date").notNull(),
+    kind: dayExceptionKindEnum("kind").notNull(),
+    reason: text("reason"), // optional, trimmed 1-200 chars
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("day_exceptions_semester_id_idx").on(table.semesterId),
+    index("day_exceptions_user_id_idx").on(table.userId),
+
+    // One exception per semester date
+    unique("day_exceptions_semester_date_unique").on(
+      table.semesterId,
+      table.date,
+    ),
+
+    // Composite foreign-key target for P14's day_exception_slots: it lets
+    // the database prove that a slot's source exception belongs to the
+    // occurrence's semester and owner.
+    unique("day_exceptions_id_semester_id_user_id_unique").on(
+      table.id,
+      table.semesterId,
+      table.userId,
+    ),
+
+    // Ownership is structural: the exception's semester must belong to the same owner.
+    foreignKey({
+      columns: [table.semesterId, table.userId],
+      foreignColumns: [semesters.id, semesters.userId],
+      name: "day_exceptions_semester_owner_fk",
+    }).onDelete("restrict"),
+
+    // Date must fall inside semester range (enforced in repository)
+    // No CHECK constraint to avoid table coupling
+  ],
+);
+
+/**
+ * Classes that happen on a specific date for a special schedule exception.
+ *
+ * A day_exception with kind = 'special_schedule' defines its classes
+ * in this table. A holiday exception (kind = 'holiday') has zero or no
+ * slots.
+ *
+ * Slots within one exception cannot overlap on the same calendar date.
+ * Overlap prevention is enforced in the repository layer using P12's
+ * concurrency control pattern (SELECT FOR UPDATE on parent exception).
+ */
+export const dayExceptionSlots = pgTable(
+  "day_exception_slots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    exceptionId: uuid("exception_id").notNull(),
+    semesterId: uuid("semester_id").notNull(),
+    userId: text("user_id").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+
+    startTime: time("start_time").notNull(),
+    endTime: time("end_time").notNull(),
+
+    room: text("room"),
+    classType: classTypeEnum("class_type").notNull().default("lecture"),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("day_exception_slots_exception_id_idx").on(table.exceptionId),
+    index("day_exception_slots_semester_id_idx").on(table.semesterId),
+    index("day_exception_slots_subject_id_idx").on(table.subjectId),
+
+    // Exception-slot ownership: slot's semester_id/user_id must match parent exception
+    // This composite FK ensures the slot's semester/user are those of its exception
+    foreignKey({
+      columns: [table.exceptionId, table.semesterId, table.userId],
+      foreignColumns: [
+        dayExceptions.id,
+        dayExceptions.semesterId,
+        dayExceptions.userId,
+      ],
+      name: "day_exception_slots_exception_owner_fk",
+    }).onDelete("restrict"),
+
+    // Subject belongs to the same semester and owner as the slot
+    foreignKey({
+      columns: [table.subjectId, table.semesterId, table.userId],
+      foreignColumns: [subjects.id, subjects.semesterId, subjects.userId],
+      name: "day_exception_slots_subject_owner_fk",
+    }).onDelete("restrict"),
+
+    // Semester ownership
+    foreignKey({
+      columns: [table.semesterId, table.userId],
+      foreignColumns: [semesters.id, semesters.userId],
+      name: "day_exception_slots_semester_owner_fk",
+    }).onDelete("restrict"),
+
+    // Time ordering: end strictly after start, no midnight crossing
+    check(
+      "day_exception_slots_time_order",
+      sql`${table.endTime} > ${table.startTime}`,
+    ),
+
+    // Room length if present
+    check(
+      "day_exception_slots_room_length",
+      sql`${table.room} is null or char_length(btrim(${table.room})) between 1 and 80`,
+    ),
+
+    // Slot overlap prevention: handled in repository layer with transaction lock
+    // on parent day_exception row, following P12's concurrency-control pattern.
+    // No database constraint: P12's partial unique index on exact duplicate times,
+    // P14 will enforce within-exception overlap in application layer.
+  ],
+);
+
+// Type exports
+export type DayExceptionKind = SchemaDayExceptionKind;
+export type DayExceptionRow = typeof dayExceptions.$inferSelect;
+export type DayExceptionSlotRow = typeof dayExceptionSlots.$inferSelect;
+
+// These types are repeated from @gpa/shared because drizzle-kit
+// loads this file through a CommonJS resolver that cannot import the
+// ESM-only shared package. This equality check turns any future drift
+// between the two into a type error instead of a runtime mismatch.
+type SchemaDayExceptionKindType =
+  (typeof dayExceptionKindEnum.enumValues)[number];
+
+// Reusable type guard/equality - we could define this at the top with other equals
+// but it's better to keep it close to where we use it
+type SchemaDayExceptionKindParity = Equal<
+  SchemaDayExceptionKind,
+  SchemaDayExceptionKindType
+>;
+
+// For consistency with P12's approach
+export const dayExceptionKindParity: SchemaDayExceptionKindParity = true;

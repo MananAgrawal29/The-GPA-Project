@@ -608,3 +608,220 @@ new entries that reference the earlier one.
 -   **Follow-up:** Record the subject-delete `ON DELETE RESTRICT` → 409
     mapping as a P13-adjacent follow-up; begin P14 (date exceptions)
     only after P13 is verified against a real database.
+
+-----------------------------------------------------------------------
+
+## 2026-11-10 --- P14: Calendar date exceptions
+
+-   **Change:** Added date-specific exceptions to the recurring timetable
+    --- holidays (no classes) and special schedules (their own class
+    list) --- without touching `timetable_slots`. Includes a forward
+    migration, Drizzle tables, shared contracts, server-side validation,
+    two owner-scoped repositories, authenticated nested routes, a typed
+    web client, and a month calendar screen with create, edit, delete,
+    and special-schedule slot management. Implemented and verified but
+    **not committed**.
+-   **Schema and migration:** `0003_calendar_date_exceptions.sql` is
+    additive, drizzle-kit generated, and creates `day_exception_kind`
+    (`holiday`, `special_schedule`), `day_exceptions` (one row per
+    semester date through `UNIQUE (semester_id, date)`, enum `kind`,
+    optional `reason`) and `day_exception_slots` (subject, wall-clock
+    start/end, room, and `class_type` typed with P12's existing enum).
+    Ownership is structural per D035: `(semester_id, user_id) ->
+    semesters(id, user_id)`, `(exception_id, semester_id, user_id) ->
+    day_exceptions(...)`, and `(subject_id, semester_id, user_id) ->
+    subjects(...)`, all `ON DELETE RESTRICT`; `day_exceptions` also
+    carries the `(id, semester_id, user_id)` target. Time order and room
+    length (1--80) are `CHECK`s, and the five indexes use the schema's
+    `..._idx` names. No trigger or function is created; `updated_at`
+    follows the existing `$onUpdate` convention. `0000`--`0002` are
+    untouched, and the three existing schema tests expect the two new
+    tables.
+-   **Migration repair:** the first `0003_snapshot.json` was hand-written
+    and invalid for drizzle-kit 0.31.11 --- no `id`/`prevId`, only the
+    two new tables instead of the cumulative schema, and
+    `primary`/`hasDefault` keys plus array-style enums that no 0.31
+    serializer emits; its 2--80 room check came from a stale comment.
+    The SQL also declared `kind` as `TEXT` with a `CHECK`, `class_type`
+    as unconstrained `TEXT`, used `idx_` index names, and added an
+    `update_updated_at_column()` trigger. Both were repaired together:
+    the SQL was regenerated from `schema.ts`, and the snapshot was
+    regenerated with the installed drizzle-kit against a scratch
+    `0000`--`0002` baseline, producing a genuine cumulative snapshot
+    whose `prevId` is `0002`'s `id`
+    (`1fbe519e-8f88-46da-be95-d0b5bffa3840`). Nothing referenced the
+    fabricated snapshot's id, and no migration had been applied to a
+    PostgreSQL server.
+-   **Repositories and validation:** `day-exception-repository.ts`
+    creates, lists, reads, updates, and deletes with every query scoped
+    by owner and semester. Dates are compared as `YYYY-MM-DD` strings
+    against the semester bounds and are never parsed through `Date`. A
+    duplicate date maps to a field issue, a foreign semester to an
+    ownership error, and deletion raises a stable conflict while slots
+    exist. `day-exception-slot-repository.ts` runs every write in a
+    transaction that locks the parent exception row first, refuses a
+    subject outside the semester and owner, refuses any write under a
+    holiday, and rejects overlap using half-open `[start, end)` ranges,
+    so adjacent slots are allowed. Times cross the contract as `HH:MM`
+    (D034).
+-   **API and contracts:** `day-exception-routes.ts` exposes list, get,
+    create, patch, and delete for exceptions and their slots behind the
+    P08 guard: 503 when auth or the database is missing, 401 without a
+    verified session, 404 for a missing or foreign record, 422 with
+    field issues for validation and date bounds, and 409 for overlap and
+    for deleting an exception that still has slots. The owner comes only
+    from the session. `packages/shared/src/day-exception.ts` holds the
+    field, create, patch, and record schemas.
+-   **Calendar UI:** `CalendarPage.tsx` renders a month grid with
+    weekday headers, Prev/Next/Today navigation, holiday and
+    special-schedule badges, an exception detail panel, holiday and slot
+    create/edit/delete flows, semester selection bound to `?semester=`,
+    and explicit loading, empty, validation, success, and failure states.
+    A failed exceptions load renders a status panel with Retry instead of
+    an empty calendar. The special-schedule delete confirmation states
+    that all slots must be deleted first, matching the API's `ON DELETE
+    RESTRICT` and 409. `/calendar` is promoted from planned to built.
+-   **Test repair:** the calendar suite could not pass for reasons
+    unrelated to timing. Fixtures used non-UUID ids that the shared
+    schema rejects, so every exceptions response failed validation and
+    the old page hid that as an empty calendar; the page opens on the
+    current month, so October fixtures were off-screen; and several
+    selectors were ambiguous (two "Add Exception" buttons, two "Delete"
+    buttons, and a label whose text included its hint paragraph).
+    Fixtures now use UUIDs, tests drive the real Prev/Next controls to
+    the fixture's month, dialog interactions are scoped, and the two
+    panel delete buttons carry distinct accessible names. No assertion
+    was weakened, and the exceptions failure state is now rendered and
+    tested.
+-   **Verification:** `pnpm check` exit 0 --- format, lint, typecheck,
+    369 tests (300 API across 13 files, 69 web across 7 files), build.
+    The 19 calendar tests drive the page in jsdom with a stubbed
+    `fetch`, and the 74 P14 repository/migration tests apply the real
+    `0003` SQL through drizzle's migrator. `git diff --check` is clean.
+    `drizzle-kit check` reports "Everything's fine", and a throwaway
+    `db:generate` over the real history reports "No schema changes,
+    nothing to migrate".
+-   **Audit finding (blocker, repaired):** the original
+    `apps/api/drizzle/meta/0003_snapshot.json` was malformed for
+    drizzle-kit. It had no `id`/`prevId`, listed only the two new tables
+    instead of the cumulative snapshot, and recorded `room_length` as
+    2--80 where the SQL and schema use 1--80, so `drizzle-kit check`
+    reported "data is malformed" and `db:generate` could not run. Both
+    the snapshot and the SQL were repaired as described above; runtime
+    behaviour, tests, and builds were unaffected throughout because
+    migrations are applied as SQL, not from snapshots.
+-   **Audit findings (non-blocking):** route bodies still bypass the
+    shared input schemas, so a malformed `date` reaches PostgreSQL and
+    surfaces as a 500 rather than a 422. `updateDayException` can change
+    a `special_schedule` to `holiday` while slots exist, leaving a
+    holiday that owns slots and breaks D033's invariant. The domain
+    module re-implements validation the shared package now owns and
+    carries a stale comment saying P14 shared types do not exist. The
+    calendar renders the weekday of a date-only value through
+    `new Date(date)`, which D034 forbids and which is wrong west of UTC.
+    There are no HTTP route tests for the new endpoints and no dedicated
+    edit tests for exceptions or slots. The routes contain dead branches
+    (a duplicate `DayExceptionValidationError` check and a duplicate
+    `_sendSlotNotFound`). `schema.ts` has a comment with a literal
+    backslash (`someone else\'s`), and its `Equal<>` parity alias
+    compares a type with itself, so it detects no drift.
+-   **Data/migration impact:** Additive. Two tables, one new enum
+    (`day_exception_kind`; `class_type` is reused from P12), four
+    ownership foreign keys, two unique constraints, two checks, and five
+    indexes. No trigger, function, or existing row is created, rewritten,
+    or deleted. `day_exception_slots` has no `(id, semester_id, user_id)`
+    unique target, so P15 must add one before referencing a
+    special-schedule slot.
+-   **Known limitations:** Overlap is enforced in the repository under a
+    parent-exception lock with no database exclusion constraint, so
+    direct SQL can create overlapping slots, and PGlite cannot contend
+    two writes. Date bounds apply only when the semester has start and
+    end dates. Times are wall-clock with no timezone and no overnight
+    class (D034). Real PostgreSQL concurrency and live Clerk sessions
+    remain untested: the API suite uses PGlite and an injected verifier.
+    A subject referenced by a special-schedule slot cannot be deleted
+    (`RESTRICT`), and the subject endpoint still has no 409 mapping for
+    that rejection.
+-   **Follow-up:** Commit P14 with explicit paths, including
+    `0003_calendar_date_exceptions.sql` and its regenerated
+    `meta/0003_snapshot.json`. The non-blocking route-validation,
+    kind-change, D034 weekday, test-coverage, and dead-branch findings
+    remain follow-ups and are not part of that commit. Do not begin P15
+    in that change.
+
+-----------------------------------------------------------------------
+
+## 2026-11-11 --- P14 stabilization: invariants, shared validation, and date-only weekdays
+
+-   **Change:** Closed the P14 audit findings without touching the
+    migration or expanding scope. D033's kind invariant, D034's
+    date-only weekday, and the shared-contract request validation are
+    implemented and covered by new repository and HTTP tests. Migration
+    `0003`, its snapshot, and the journal are unchanged by this pass.
+-   **D033 kind invariant:** `updateDayException` checks for dependent
+    slots inside the existing transaction, after the parent row is
+    locked with `SELECT ... FOR UPDATE` and before any date work, and
+    raises a new `DayExceptionKindConflictError`. The route maps it to
+    **409 `day_exception_kind_conflict`**. Slots are never cascaded or
+    deleted, and partial updates that do not change the kind still work.
+    The check reads the same rows the slot repository locks first, so
+    the ordering matches D036.
+-   **D034 weekday:** `CalendarPage` derives the detail panel's weekday
+    from the ISO date components and reads it in UTC
+    (`weekdayIndexFromIsoDate`), so a date-only value can no longer shift
+    onto an adjacent day west of UTC. The Sunday-first `WEEKDAYS`
+    presentation is unchanged, and no timezone conversion was added to
+    the contract. Month-grid arithmetic still uses local `Date` objects
+    built from year/month numbers, which is navigation state rather than
+    a stored date.
+-   **Shared Zod validation:** the P14 domain validators now use
+    `createDayExceptionInputSchema`, `dayExceptionPatchSchema`, and
+    `createDayExceptionSlotInputSchema` instead of hand-written,
+    format-blind checks, following `domain/timetable.ts`. Malformed
+    dates (`2026-08-32`, `2026-02-30`, `20261110`, `not-a-date`) and
+    malformed times (`25:00`, `09:60`, `9am`, `0900`) produce
+    `DayExceptionValidationError` / `DayExceptionSlotValidationError`
+    with field paths, which the existing route mappings turn into **422
+    `validation_failed`** with `issues`. `0900` is now rejected instead
+    of being silently normalized to `09:00`. Patch validation runs
+    before the no-op short-circuit, and the end-after-start rule is kept
+    as a true time comparison over canonical `HH:MM`.
+-   **Scope note:** the partial-update checks live in
+    `apps/api/src/db/day-exception-repository.ts`, so that file needed a
+    single call-site change (`validateDayExceptionPatch(patch)` in place
+    of the inline field checks). All validation logic lives in the
+    domain module; no route, shared contract, schema, migration, or
+    frontend file changed.
+-   **Tests added:** 3 exception repository tests (malformed create
+    dates, the reported `date` path, malformed update dates leaving the
+    row untouched), 2 slot repository tests (create and update with
+    non-canonical times, including `0900`), and 11 HTTP tests (valid
+    create still 201, four malformed dates on create, a malformed date
+    on update, four malformed slot time pairs, and a malformed slot
+    update), all asserting 422 with the expected field issues. No
+    existing assertion was weakened or removed; the D033, ownership,
+    overlap, delete-conflict, and partial-update tests still pass.
+-   **Verification:** `pnpm check` exit 0 --- format, lint, typecheck,
+    **391 tests (321 API across 14 files, 70 web across 7 files)**, and
+    a successful build. Focused runs: 46 exception repository tests, 35
+    slot repository tests, 14 day-exception route tests, and 20 calendar
+    tests. `drizzle-kit check` still reports "Everything's fine",
+    `git diff --check` is clean, and `drizzle-kit generate` was not
+    re-run (the snapshot was not touched).
+-   **Audit classification:** the earlier 500-instead-of-422 validation
+    finding, the D033 kind-change finding, and the D034 weekday finding
+    are **fixed**. The dead route branches (a duplicate
+    `DayExceptionValidationError` check and a duplicate
+    `_sendSlotNotFound`) remain **non-blocking follow-ups** and behave
+    harmlessly. Missing dedicated UI edit-flow tests and the
+    subject-delete `ON DELETE RESTRICT` -> 409 mapping remain
+    **non-blocking follow-ups**.
+-   **Known limitations:** unchanged from the P14 entry --- overlap is
+    repository-enforced under a parent-exception lock with no database
+    exclusion constraint, PGlite cannot contend two writes, date bounds
+    apply only when the semester has start and end dates, and real
+    PostgreSQL and live Clerk sessions are still untested.
+    `day_exception_slots` still has no `(id, semester_id, user_id)`
+    unique target, which P15 needs before referencing a one-off slot.
+-   **Follow-up:** Commit P14 with explicit paths, then begin P15. Do not
+    begin P15 in the same change.
