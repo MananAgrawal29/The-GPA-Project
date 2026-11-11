@@ -843,3 +843,14 @@ new entries that reference the earlier one.
   Added 13 repository tests and 5 route tests. `pnpm check` exit 0 with
   339 API tests (16 files) and 70 web tests; `drizzle-kit check` clean;
   `git diff --check` clean.
+
+- **P16 --- Timetable calendar views (2026-11-11):** Added typed frontend
+  class-occurrence API client (`listClassOccurrences`,
+  `generateClassOccurrences`, `getClassOccurrence`) using shared Zod
+  contracts. Integrated dated occurrences into `CalendarPage` with an
+  explicit user-triggered generation action, visible-range fetch, and
+  separate loading, empty, error, and generation-pending states.
+  Calendar day cells now distinguish dated classes from recurring
+  timetable rules, holidays, and special schedules. `TimetablePage`
+  remains focused on recurring weekly rules. Added 3 focused
+  `CalendarPage` tests. `pnpm check` exit 0; `git diff --check` clean.

@@ -1,7 +1,7 @@
 # Project Progress --- The GPA Project
 
 **Last updated:** 2026-11-11\
-**Current milestone:** P15 --- Dated class occurrences (implemented; uncommitted)\
+**Current milestone:** P16 --- Timetable calendar views (implemented; uncommitted)\
 
 **Overall status:** Runnable foundation with a responsive shell, an
 owner-scoped semester and subject model, authenticated subject,

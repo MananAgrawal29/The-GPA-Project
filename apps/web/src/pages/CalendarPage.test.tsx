@@ -13,6 +13,7 @@ import type {
   DayExceptionSlot,
   Semester,
   Subject,
+  ClassOccurrence,
 } from "@gpa/shared";
 import CalendarPage from "./CalendarPage";
 
@@ -136,6 +137,9 @@ interface FakeApiOptions {
   readonly failUpdateSlot?: Response;
   readonly failDeleteException?: Response;
   readonly failDeleteSlot?: Response;
+  readonly occurrences?: readonly ClassOccurrence[];
+  readonly failOccurrences?: Response;
+  readonly failGenerateOccurrences?: Response;
 }
 
 interface RecordedCall {
@@ -586,6 +590,56 @@ function installFakeApi(options: FakeApiOptions = {}) {
           ),
           500,
         );
+      }
+
+      const occurrencesGenerateMatch =
+        /^\/semesters\/([^/]+)\/class-occurrences\/generate$/.exec(url);
+
+      if (occurrencesGenerateMatch !== null && method === "POST") {
+        const semesterId = decodeURIComponent(
+          occurrencesGenerateMatch[1] ?? "",
+        );
+
+        if (options.failGenerateOccurrences !== undefined) {
+          return options.failGenerateOccurrences;
+        }
+
+        return jsonResponse({
+          occurrences: (options.occurrences ?? []).filter(
+            (occurrence) => occurrence.semesterId === semesterId,
+          ),
+        });
+      }
+
+      const occurrencesListMatch =
+        /^\/semesters\/([^/]+)\/class-occurrences(?:\?.*)?$/.exec(url);
+
+      if (occurrencesListMatch !== null) {
+        const semesterId = decodeURIComponent(occurrencesListMatch[1] ?? "");
+
+        if (method === "GET") {
+          if (options.failOccurrences !== undefined) {
+            return options.failOccurrences;
+          }
+
+          return jsonResponse({
+            occurrences: (options.occurrences ?? []).filter(
+              (occurrence) => occurrence.semesterId === semesterId,
+            ),
+          });
+        }
+
+        if (method === "POST" && url.endsWith("/generate")) {
+          if (options.failGenerateOccurrences !== undefined) {
+            return options.failGenerateOccurrences;
+          }
+
+          return jsonResponse({
+            occurrences: (options.occurrences ?? []).filter(
+              (occurrence) => occurrence.semesterId === semesterId,
+            ),
+          });
+        }
       }
 
       const subjectsMatch = /^\/semesters\/([^/]+)\/subjects$/.exec(url);
@@ -1364,6 +1418,142 @@ describe("calendar page", () => {
 
     expect(await screen.findByText("Slot was removed.")).toBeTruthy();
     expect(screen.queryByText(/10:00 – 11:00/)).toBeNull();
+  });
+});
+
+function makeClassOccurrence(
+  overrides: Partial<ClassOccurrence> = {},
+): ClassOccurrence {
+  return {
+    id: "00000000-0000-4000-8000-000000000501",
+    semesterId: SEMESTER_ONE.id,
+    subjectId: PHYSICS.id,
+    sourceSlotId: null,
+    sourceExceptionSlotId: null,
+    date: overrides.date ?? "2026-10-15",
+    startTime: "09:00",
+    endTime: "10:00",
+    room: null,
+    classType: "lecture",
+    status: "scheduled",
+    createdAt: "2026-07-01T00:00:00.000Z",
+    updatedAt: "2026-07-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("calendar page: dated classes", () => {
+  it("displays dated classes on the calendar", async () => {
+    installFakeApi({
+      semesters: [SEMESTER_ONE],
+      exceptions: [],
+      subjects: [PHYSICS],
+      occurrences: [makeClassOccurrence({ date: "2026-10-15" })],
+    });
+
+    renderCalendar(`/calendar?semester=${SEMESTER_ONE.id}`);
+
+    await screen.findByText("Calendar");
+    await showMonthOf("2026-10-15");
+
+    expect(await screen.findByText("1 dated class")).toBeTruthy();
+  });
+
+  it("generates dated classes on request", async () => {
+    installFakeApi({
+      semesters: [SEMESTER_ONE],
+      exceptions: [],
+      subjects: [PHYSICS],
+      occurrences: [makeClassOccurrence({ date: "2026-10-15" })],
+    });
+
+    renderCalendar(`/calendar?semester=${SEMESTER_ONE.id}`);
+
+    await screen.findByText("Calendar");
+    await showMonthOf("2026-10-15");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate dated classes" }),
+    );
+
+    expect(
+      await screen.findByText(/Generated or confirmed 1 dated class/),
+    ).toBeTruthy();
+    expect(await screen.findByText("1 dated class")).toBeTruthy();
+  });
+
+  it("shows an error state when dated classes cannot load", async () => {
+    installFakeApi({
+      semesters: [SEMESTER_ONE],
+      exceptions: [],
+      subjects: [],
+      failOccurrences: errorResponse(
+        "unavailable",
+        "Dated classes are unavailable",
+        undefined,
+        503,
+      ),
+    });
+
+    renderCalendar(`/calendar?semester=${SEMESTER_ONE.id}`);
+
+    expect(
+      (await screen.findAllByText("Dated classes are unavailable")).length,
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe("calendar page: stale dated classes", () => {
+  it("clears stale dated-class badges while a semester switch is pending", async () => {
+    installFakeApi({
+      semesters: [SEMESTER_ONE, SEMESTER_TWO],
+      exceptions: [],
+      subjects: [],
+      occurrences: [makeClassOccurrence({ date: "2026-10-15" })],
+    });
+
+    const baseFetch = globalThis.fetch as (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => Promise<Response>;
+    let resolveSecondOccurrences: ((response: Response) => void) | undefined;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (
+          url.includes(SEMESTER_TWO.id) &&
+          url.includes("/class-occurrences")
+        ) {
+          return new Promise<Response>((resolve) => {
+            resolveSecondOccurrences = resolve;
+          });
+        }
+
+        return baseFetch(input, init);
+      }),
+    );
+
+    renderCalendar(`/calendar?semester=${SEMESTER_ONE.id}`);
+
+    await screen.findByText("Calendar");
+    await showMonthOf("2026-10-15");
+    expect(await screen.findByText("1 dated class")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Semester"), {
+      target: { value: SEMESTER_TWO.id },
+    });
+
+    expect(screen.queryByText("1 dated class")).toBeNull();
+    expect(screen.getByText("Loading dated classes…")).toBeTruthy();
+
+    resolveSecondOccurrences?.(jsonResponse({ occurrences: [] }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("Loading dated classes…")).toBeNull(),
+    );
   });
 });
 

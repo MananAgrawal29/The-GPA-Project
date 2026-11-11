@@ -18,6 +18,7 @@ import type {
   CreateDayExceptionInput,
   CreateDayExceptionSlotInput,
   DayExceptionSlotPatch,
+  ClassOccurrence,
 } from "@gpa/shared";
 import { ApiRequestError } from "../api/client";
 import { listSemesters } from "../api/semesters";
@@ -34,6 +35,10 @@ import {
   listDayExceptionSlots,
   updateDayExceptionSlot,
 } from "../api/day-exceptions";
+import {
+  generateClassOccurrences,
+  listClassOccurrences,
+} from "../api/class-occurrences";
 import PageHeader from "../components/PageHeader";
 
 const WEEKDAYS: readonly {
@@ -124,6 +129,11 @@ type SlotsView =
   | { readonly kind: "ready"; readonly slots: readonly DayExceptionSlot[] }
   | LoadFailure;
 
+type OccurrencesView =
+  | { readonly kind: "loading" }
+  | { readonly kind: "ready"; readonly occurrences: readonly ClassOccurrence[] }
+  | LoadFailure;
+
 function failureOf(error: unknown): LoadFailure {
   if (error instanceof ApiRequestError) {
     if (error.status === 401) {
@@ -149,7 +159,7 @@ function FailurePanel({
   onRetry,
 }: {
   readonly failure: LoadFailure;
-  readonly context: "semesters" | "exceptions" | "slots";
+  readonly context: "semesters" | "exceptions" | "slots" | "occurrences";
   readonly onRetry: () => void;
 }) {
   const title =
@@ -158,14 +168,18 @@ function FailurePanel({
         ? "Semesters are unavailable"
         : context === "exceptions"
           ? "Exceptions are unavailable"
-          : "Slots are unavailable"
+          : context === "slots"
+            ? "Slots are unavailable"
+            : "Dated classes are unavailable"
       : failure.kind === "signInRequired"
         ? "Sign in required"
         : context === "semesters"
           ? "Could not load semesters"
           : context === "exceptions"
             ? "Could not load exceptions"
-            : "Could not load slots";
+            : context === "slots"
+              ? "Could not load slots"
+              : "Could not load dated classes";
 
   const tone =
     failure.kind === "unavailable"
@@ -391,6 +405,13 @@ export default function CalendarPage() {
     kind: "loading",
   });
   const [slotsView, setSlotsView] = useState<SlotsView>({ kind: "loading" });
+  const [occurrencesView, setOccurrencesView] = useState<OccurrencesView>({
+    kind: "loading",
+  });
+  const [occurrencesReloadToken, setOccurrencesReloadToken] = useState(0);
+  const [generationPending, setGenerationPending] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [generationNotice, setGenerationNotice] = useState<string | null>(null);
 
   const [selectedExceptionId, setSelectedExceptionId] = useState<string | null>(
     null,
@@ -511,6 +532,7 @@ export default function CalendarPage() {
     setSelectedExceptionId(null);
     setExceptionFormOpen(false);
     setSlotFormOpen(false);
+    setOccurrencesView({ kind: "loading" });
 
     const next = new URLSearchParams(searchParams);
     next.set("semester", target);
@@ -601,6 +623,37 @@ export default function CalendarPage() {
   function reloadSlots(): void {
     setSlotsView({ kind: "loading" });
     setSlotsReloadToken((token) => token + 1);
+  }
+
+  function reloadOccurrences(): void {
+    setOccurrencesView({ kind: "loading" });
+    setOccurrencesReloadToken((token) => token + 1);
+  }
+
+  async function handleGenerateOccurrences(): Promise<void> {
+    if (selectedSemesterId === null) return;
+
+    setGenerationPending(true);
+    setGenerationError(null);
+    setGenerationNotice(null);
+
+    try {
+      const generated = await generateClassOccurrences(selectedSemesterId, {});
+      reloadOccurrences();
+      setGenerationNotice(
+        generated.length === 0
+          ? "No dated classes were available to generate for this semester."
+          : `Generated or confirmed ${generated.length} dated class${generated.length === 1 ? "" : "es"}.`,
+      );
+    } catch (error) {
+      setGenerationError(
+        error instanceof ApiRequestError
+          ? error.message
+          : "Could not generate dated classes. Try again.",
+      );
+    } finally {
+      setGenerationPending(false);
+    }
   }
 
   function retrySlots(): void {
@@ -923,6 +976,20 @@ export default function CalendarPage() {
     [subjectsView],
   );
 
+  const occurrencesByDate = useMemo(() => {
+    const map = new Map<string, ClassOccurrence[]>();
+
+    if (occurrencesView.kind === "ready") {
+      for (const occurrence of occurrencesView.occurrences) {
+        const existing = map.get(occurrence.date) ?? [];
+        existing.push(occurrence);
+        map.set(occurrence.date, existing);
+      }
+    }
+
+    return map;
+  }, [occurrencesView]);
+
   const _slotsByException = useMemo(() => {
     const map = new Map<string, DayExceptionSlot[]>();
 
@@ -989,6 +1056,58 @@ export default function CalendarPage() {
 
     return days;
   }, [currentMonth]);
+
+  const visibleRange = useMemo(() => {
+    const dates = calendarDays
+      .filter((day): day is Date => day !== null)
+      .map(dateToString);
+
+    if (dates.length === 0) {
+      return { fromDate: undefined, toDate: undefined };
+    }
+
+    return {
+      fromDate: dates.reduce((earliest, current) =>
+        current < earliest ? current : earliest,
+      ),
+      toDate: dates.reduce((latest, current) =>
+        current > latest ? current : latest,
+      ),
+    };
+  }, [calendarDays]);
+
+  useEffect(() => {
+    if (selectedSemester === null) {
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+
+    listClassOccurrences(
+      selectedSemester.id,
+      {
+        fromDate: visibleRange.fromDate,
+        toDate: visibleRange.toDate,
+      },
+      controller.signal,
+    )
+      .then((occurrences) => {
+        if (active) {
+          setOccurrencesView({ kind: "ready", occurrences });
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setOccurrencesView(failureOf(error));
+        }
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [selectedSemester, visibleRange, occurrencesReloadToken]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1086,6 +1205,49 @@ export default function CalendarPage() {
         onChange={changeSemester}
       />
 
+      {generationNotice !== null ? (
+        <p
+          role="status"
+          className="mt-4 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100"
+        >
+          {generationNotice}
+        </p>
+      ) : null}
+
+      {generationError !== null ? (
+        <p
+          role="alert"
+          className="mt-4 rounded-lg border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100"
+        >
+          {generationError}
+        </p>
+      ) : null}
+
+      {occurrencesView.kind === "loading" ? (
+        <p
+          role="status"
+          aria-busy="true"
+          className="mt-4 text-sm text-slate-400"
+        >
+          Loading dated classes…
+        </p>
+      ) : null}
+
+      {occurrencesView.kind === "unavailable" ||
+      occurrencesView.kind === "signInRequired" ||
+      occurrencesView.kind === "error" ? (
+        <FailurePanel
+          failure={occurrencesView}
+          context="occurrences"
+          onRetry={reloadOccurrences}
+        />
+      ) : null}
+
+      <p className="mt-4 text-xs leading-relaxed text-slate-500">
+        Timetable shows recurring weekly rules. This calendar shows dated
+        classes generated from them, along with holidays and special schedules.
+      </p>
+
       <div className="mt-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
@@ -1116,6 +1278,19 @@ export default function CalendarPage() {
               className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
             >
               Today
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleGenerateOccurrences()}
+              disabled={
+                generationPending ||
+                selectedSemester === null ||
+                selectedSemester.startDate === null ||
+                selectedSemester.endDate === null
+              }
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+            >
+              {generationPending ? "Generating…" : "Generate dated classes"}
             </button>
             <button
               type="button"
@@ -1198,6 +1373,15 @@ export default function CalendarPage() {
                       {day.getDate()}
                     </span>
                   </div>
+
+                  {occurrencesByDate.get(dateString)?.length ? (
+                    <div className="mt-1 rounded border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-medium text-indigo-200">
+                      {occurrencesByDate.get(dateString)?.length} dated class
+                      {(occurrencesByDate.get(dateString)?.length ?? 0) === 1
+                        ? ""
+                        : "es"}
+                    </div>
+                  ) : null}
 
                   {exception ? (
                     <div className="mt-1 space-y-1">
