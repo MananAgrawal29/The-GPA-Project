@@ -31,6 +31,7 @@ import {
   DayExceptionValidationError,
 } from "./domain/day-exception-repository.js";
 import {
+  DayExceptionSlotConflictError,
   DayExceptionSlotHolidayConflictError,
   DayExceptionSlotOverlapError,
   DayExceptionSlotOwnershipError,
@@ -566,20 +567,33 @@ export function registerDayExceptionRoutes(
         return;
       }
 
-      const deleted = await deleteDayExceptionSlot(
-        database,
-        userId,
-        exceptionId,
-        semesterId,
-        slotId,
-      );
+      try {
+        const deleted = await deleteDayExceptionSlot(
+          database,
+          userId,
+          exceptionId,
+          semesterId,
+          slotId,
+        );
 
-      if (!deleted) {
-        _sendSlotNotFound(response);
-        return;
+        if (!deleted) {
+          _sendSlotNotFound(response);
+          return;
+        }
+
+        response.status(204).send();
+      } catch (error) {
+        if (error instanceof DayExceptionSlotConflictError) {
+          sendError(
+            response,
+            409,
+            "day_exception_slot_conflict",
+            error.message,
+          );
+          return;
+        }
+        throw error;
       }
-
-      response.status(204).send();
     }),
   );
 }
